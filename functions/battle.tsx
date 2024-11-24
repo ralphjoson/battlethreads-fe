@@ -53,7 +53,7 @@ const attack = (attacker: Avatar, defender: Avatar) => {
 
   // Calculate damage to defender
   const damage = calculateDamage(attacker, defender);
-
+  console.log(`${defender.username} took ${damage} damage`);
   // Subtract damage from defender's health
   defender.stats.health -= damage;
 
@@ -75,7 +75,7 @@ const retaliate = (defender: Avatar, attacker: Avatar) => {
 
   // Calculate damage for retaliation
   const retaliationDamage = calculateDamage(defender, attacker);
-
+  console.log(`${attacker.username} took ${retaliationDamage} damage`);
   // Subtract retaliation damage from attacker's health
   attacker.stats.health -= retaliationDamage;
 
@@ -87,35 +87,74 @@ const retaliate = (defender: Avatar, attacker: Avatar) => {
   return `${retaliationDamage} retaliation damage\n${attacker.username} survives the counterattack.`;
 };
 
-// Example special attack function
-const specialAttack = (attacker: Avatar, defender: Avatar) => {
-  console.log(
-    `${attacker.username} is using a special attack on ${defender.username}`
-  );
-  const baseDamage = getRandomInt(
-    attacker.stats.attack + 10,
-    attacker.stats.attack + 20
-  );
-  const damageMessage = calculateDamage(attacker, defender);
-  const damage = calculateDamage(attacker, defender);
+// Function to handle experience gain and leveling up
+const gainExperience = (character: Avatar, experienceGained: number) => {
+  character.stats.experience += experienceGained;
+  console.log(`${character.username} gained ${experienceGained} experience!`);
 
-  // Subtract damage from defender's health
-  defender.stats.health -= damage;
-
-  // Check if defender is still alive
-  if (defender.stats.health <= 0) {
-    return `${defender.username} has been defeated! ${attacker.username} wins.`;
+  // Level-up condition (e.g., every 100 experience points results in a level-up)
+  const levelUpThreshold = 100;
+  while (character.stats.experience >= levelUpThreshold) {
+    character.stats.level += 1;
+    character.stats.experience -= levelUpThreshold;
+    console.log(
+      `${character.username} leveled up! New level: ${character.stats.level}`
+    );
   }
-
-  return `${damageMessage} (Special Attack)`;
 };
 
-// Heal function (restores health)
-const heal = (character: Avatar) => {
-  console.log(`${character.username} is healing!`);
-  const healingAmount = getRandomInt(5, 15); // Healing between 5 and 15 HP
-  character.stats.health += healingAmount;
-  return `${character.username} heals for ${healingAmount} HP!`;
+// After a battle, check if the defender won and grant experience
+const battleOutcome = (attacker: Avatar, defender: Avatar) => {
+  const result = attack(attacker, defender);
+
+  if (defender.stats.health <= 0) {
+    // Defender lost
+    return result;
+  } else {
+    // Defender won, gain experience
+    gainExperience(defender, 50); // Example experience gain for winning
+    return `${result}\n${defender.username} wins and gains experience!`;
+  }
 };
 
-export { attack, retaliate, specialAttack, heal };
+// Example usage of the battle and experience system
+const attacker: Avatar = {
+  username: "Attacker",
+  stats: {
+    attack: 25,
+    defense: 10,
+    criticalChance: 20,
+    criticalDamageModifier: 50,
+    dodgeChance: 15,
+    level: 1,
+    agility: 10,
+    health: 100,
+    experience: 0,
+  },
+};
+
+const defender: Avatar = {
+  username: "Defender",
+  stats: {
+    attack: 255,
+    defense: 255,
+    criticalChance: 50,
+    criticalDamageModifier: 100,
+    dodgeChance: 40,
+    level: 99,
+    agility: 255,
+    health: 9999,
+    experience: 0,
+  },
+};
+
+export const testBattleSystem = () => {
+  console.log("Starting battle simulation...");
+  console.log(battleOutcome(attacker, defender));
+  console.log("-------------------------");
+  console.log("Starting battle simulation...");
+  console.log(battleOutcome(attacker, defender));
+  console.log("-------------------------");
+  console.log("Starting battle simulation...");
+  console.log(battleOutcome(attacker, defender));
+};

@@ -7,6 +7,7 @@ export interface Stats {
   level: number;
   agility: number; // Influence dodge chance
   health: number; // Add health for tracking health during battle
+  experience: number; // Track experience points
 }
 
 export interface Avatar {
