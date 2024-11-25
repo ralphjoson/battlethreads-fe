@@ -1,118 +1,121 @@
 import { Avatar } from "@/types/avatar";
 
-// Helper function to generate a random integer
-const getRandomInt = (min: number, max: number): number => {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
+// Utility functions
+const getRandomInt = (min: number, max: number): number =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
 
-// Calculate critical hit chance based on the character's criticalChance stat
-const getCriticalChance = (character: Avatar) => {
-  return getRandomInt(1, 100) <= character.stats.criticalChance;
-};
+const getCriticalChance = (character: Avatar): boolean =>
+  getRandomInt(1, 100) <= character.stats.criticalChance;
 
-// Calculate dodge chance based on the character's dodgeChance stat
-const getDodgeChance = (defender: Avatar) => {
-  // Add defender's agility to their dodge chance for a more dynamic effect
-  const dodgeChance = defender.stats.dodgeChance + defender.stats.agility;
-  return getRandomInt(1, 100) <= dodgeChance;
-};
+const getDodgeChance = (character: Avatar): boolean =>
+  getRandomInt(1, 100) <= character.stats.dodgeChance + character.stats.agility;
 
-// Calculate damage considering stats, level, RNG, and critical damage modifier
+// Core battle mechanics
 export const calculateDamage = (attacker: Avatar, defender: Avatar): number => {
-  // Step 1: Check if the defender dodges the attack
-  if (getDodgeChance(defender)) {
-    console.log(`${defender.username} dodged the attack!`);
-    return 0; // No damage dealt if dodged
-  }
+  if (getDodgeChance(defender)) return 0; // Dodged attack
 
-  // Step 2: Calculate base damage based on attacker's attack stat
   const baseDamage = getRandomInt(
     attacker.stats.attack - 5,
     attacker.stats.attack + 5
   );
-
-  // Step 3: Check for critical hit chance and apply critical damage modifier
   const isCriticalHit = getCriticalChance(attacker);
   const criticalMultiplier = isCriticalHit
     ? 1 + attacker.stats.criticalDamageModifier / 100
-    : 1; // Apply modifier if critical hit
+    : 1;
 
-  // Step 4: Calculate total damage
   const totalDamage = baseDamage * criticalMultiplier;
-
-  // Step 5: Calculate damage reduction based on defender's defense stat
   const damageAfterDefense = totalDamage - defender.stats.defense;
 
-  // Ensure the damage doesn't go below zero
-  return Math.max(damageAfterDefense, 0);
+  return Math.max(damageAfterDefense, 0); // No negative damage
 };
 
-// Handle an attack, update health, and check if the opponent is still alive
-const attack = (attacker: Avatar, defender: Avatar) => {
-  console.log(`${attacker.username} is attacking ${defender.username}`);
+const applyDamage = (
+  attacker: Avatar,
+  defender: Avatar,
+  isCritical: boolean,
+  isDodged: boolean,
+  actions: any[]
+): number => {
+  const damage = isDodged ? 0 : calculateDamage(attacker, defender);
+  defender.stats.health = Math.max(defender.stats.health - damage, 0);
 
-  // Calculate damage to defender
-  const damage = calculateDamage(attacker, defender);
-  console.log(`${defender.username} took ${damage} damage`);
-  // Subtract damage from defender's health
-  defender.stats.health -= damage;
+  actions.push({
+    attacker: attacker.username,
+    defender: defender.username,
+    damageDealt: damage,
+    attackerHealth: attacker.stats.health,
+    defenderHealth: defender.stats.health,
+    isCritical,
+    isDodged,
+  });
 
-  // Check if defender is still alive
-  if (defender.stats.health <= 0) {
-    return `${defender.username} has been defeated! ${attacker.username} wins.`;
-  }
-
-  // If defender is alive, they retaliate
-  const retaliateMessage = retaliate(defender, attacker);
-  return `${damage} damage dealt\n${retaliateMessage}`;
+  return damage;
 };
 
-// Handle retaliation (the opponent counterattacks after being attacked)
-const retaliate = (defender: Avatar, attacker: Avatar) => {
-  console.log(
-    `${defender.username} is retaliating against ${attacker.username}`
-  );
-
-  // Calculate damage for retaliation
-  const retaliationDamage = calculateDamage(defender, attacker);
-  console.log(`${attacker.username} took ${retaliationDamage} damage`);
-  // Subtract retaliation damage from attacker's health
-  attacker.stats.health -= retaliationDamage;
-
-  // Check if attacker is still alive
-  if (attacker.stats.health <= 0) {
-    return `${attacker.username} has been defeated! ${defender.username} wins.`;
-  }
-
-  return `${retaliationDamage} retaliation damage\n${attacker.username} survives the counterattack.`;
-};
-
-// Function to handle experience gain and leveling up
-const gainExperience = (character: Avatar, experienceGained: number) => {
+const gainExperience = (character: Avatar, experienceGained: number): void => {
   character.stats.experience += experienceGained;
-  console.log(`${character.username} gained ${experienceGained} experience!`);
-
-  // Level-up condition (e.g., every 100 experience points results in a level-up)
   const levelUpThreshold = 100;
+
   while (character.stats.experience >= levelUpThreshold) {
-    character.stats.level += 1;
+    character.stats.level++;
     character.stats.experience -= levelUpThreshold;
-    console.log(
-      `${character.username} leveled up! New level: ${character.stats.level}`
-    );
   }
 };
 
-// After a battle, check if the defender won and grant experience
+// Main battle function
 export const battleOutcome = (attacker: Avatar, defender: Avatar) => {
-  const result = attack(attacker, defender);
+  const actions: {
+    attacker: string;
+    defender: string;
+    damageDealt: number;
+    attackerHealth: number;
+    defenderHealth: number;
+    isCritical: boolean;
+    isDodged: boolean;
+  }[] = [];
 
-  if (defender.stats.health <= 0) {
-    // Defender lost
-    return result;
-  } else {
-    // Defender won, gain experience
-    gainExperience(defender, 50); // Example experience gain for winning
-    return `${result}\n${defender.username} wins and gains experience!`;
+  let turns = 0;
+  let winner: string | null = null;
+  let loser: string | null = null;
+
+  while (attacker.stats.health > 0 && defender.stats.health > 0) {
+    turns++;
+
+    // Attacker's turn
+    const isCritical = getCriticalChance(attacker);
+    const isDodged = getDodgeChance(defender);
+    applyDamage(attacker, defender, isCritical, isDodged, actions);
+
+    if (defender.stats.health <= 0) {
+      winner = attacker.username;
+      loser = defender.username;
+      gainExperience(attacker, 50);
+      break;
+    }
+
+    // Defender's turn
+    const isDefenderCritical = getCriticalChance(defender);
+    const isAttackerDodged = getDodgeChance(attacker);
+    applyDamage(
+      defender,
+      attacker,
+      isDefenderCritical,
+      isAttackerDodged,
+      actions
+    );
+
+    if (attacker.stats.health <= 0) {
+      winner = defender.username;
+      loser = attacker.username;
+      gainExperience(defender, 50);
+      break;
+    }
   }
+
+  return {
+    winner,
+    loser,
+    numberOfTurns: turns,
+    actions,
+  };
 };
