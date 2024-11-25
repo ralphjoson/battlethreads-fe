@@ -104,7 +104,7 @@ const gainExperience = (character: Avatar, experienceGained: number) => {
 };
 
 // After a battle, check if the defender won and grant experience
-const battleOutcome = (attacker: Avatar, defender: Avatar) => {
+export const battleOutcome = (attacker: Avatar, defender: Avatar) => {
   const result = attack(attacker, defender);
 
   if (defender.stats.health <= 0) {

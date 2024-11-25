@@ -12,6 +12,7 @@ export interface Stats {
 
 export interface Avatar {
   username: string;
+  avatarId?: string;
   stats: Stats;
 }
 
@@ -25,6 +26,15 @@ export interface ActionSprites {
   walk?: string[];
   range?: string[];
 }
+
+export type AvatarAction =
+  | "die"
+  | "hit"
+  | "idle"
+  | "attack"
+  | "run"
+  | "walk"
+  | "range";
 
 // Interface for a collection of character sprites
 export interface CharacterSprites {
