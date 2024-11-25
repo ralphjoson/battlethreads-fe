@@ -5,22 +5,43 @@ import { useFocusEffect } from "@react-navigation/core";
 import { ThemedView } from "@/components/ThemedView";
 import { Avatar, AvatarAction } from "@/types/avatar";
 import { battleOutcome } from "@/functions/battle";
+import { Asset } from "expo-asset";
+import frameCounts from "@/lib/spriteFrameCounts";
+import {
+  getFrameWithFallback,
+  preloadFrames,
+} from "@/functions/sprite-animations";
 
 const AttackTab = () => {
+  const IDLE_DURATION_MS = 5000; // Configurable idle duration in milliseconds
+  const FRAME_INTERVAL_MS = 50; // Time each frame is displayed in milliseconds
+
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [opponentData, setOpponentData] = useState<any>(null);
   const [attackerCurrentFrame, setAttackerCurrentFrame] = useState(0);
-  const [defendercurrentFrame, setDefenderCurrentFrame] = useState(0);
+  const [defenderCurrentFrame, setDefenderCurrentFrame] = useState(0);
   const animation = useRef(new Animated.Value(1)).current;
-  const [attackerAction, setAttackerAction] = useState<AvatarAction>("idle");
-  const [attackerFrames, setAttackerFrames] = useState<[]>([]);
+  const [attackerAction, setAttackerAction] = useState<AvatarAction>("attack");
+  const [attackerFrames, setAttackerFrames] = useState<string[]>([]);
+
   const [defenderAction, setDefenderAction] = useState<AvatarAction>("idle");
-  const [defenderFrames, setDefenderFrames] = useState<[]>([]);
+  const [defenderFrames, setDefenderFrames] = useState<string[]>([]);
+  const attackerPosition = useRef(new Animated.Value(0)).current;
+  const intervalsRef = useRef<number[]>([]);
+  const [attackerFallbackImage, setAttackerFallbackImage] =
+    useState<string>("");
+  const [defenderFallbackImage, setDefenderFallbackImage] =
+    useState<string>("");
+
+  const clearAllIntervals = () => {
+    intervalsRef.current.forEach((intervalId) => clearInterval(intervalId));
+    intervalsRef.current = []; // Reset the stored intervals
+  };
 
   // Sample battle outcome function
   const attacker: Avatar = {
     username: "Attacker",
-    avatarId: "1",
+    avatarId: "2",
     stats: {
       attack: 25,
       defense: 10,
@@ -36,7 +57,7 @@ const AttackTab = () => {
 
   const defender: Avatar = {
     username: "Defender",
-    avatarId: "1",
+    avatarId: "3",
     stats: {
       attack: 255,
       defense: 255,
@@ -50,114 +71,20 @@ const AttackTab = () => {
     },
   };
 
-  useEffect(() => {}, [attackerAction]);
-
-  // Array of individual sprite frames
-  const idleFrames = useMemo(
-    () => [
-      require("@assets/sprites/1/idle/0.png"),
-      require("@assets/sprites/1/idle/1.png"),
-      require("@assets/sprites/1/idle/2.png"),
-      require("@assets/sprites/1/idle/3.png"),
-      require("@assets/sprites/1/idle/4.png"),
-      require("@assets/sprites/1/idle/5.png"),
-      require("@assets/sprites/1/idle/6.png"),
-      require("@assets/sprites/1/idle/7.png"),
-      require("@assets/sprites/1/idle/8.png"),
-      require("@assets/sprites/1/idle/9.png"),
-      require("@assets/sprites/1/idle/10.png"),
-      require("@assets/sprites/1/idle/11.png"),
-      require("@assets/sprites/1/idle/12.png"),
-      require("@assets/sprites/1/idle/13.png"),
-      require("@assets/sprites/1/idle/14.png"),
-      require("@assets/sprites/1/idle/15.png"),
-      require("@assets/sprites/1/idle/16.png"),
-      require("@assets/sprites/1/idle/17.png"),
-    ],
-    []
-  );
-
-  const attackFrames = useMemo(
-    () => [
-      require("@assets/sprites/1/attack/0.png"),
-      require("@assets/sprites/1/attack/1.png"),
-      require("@assets/sprites/1/attack/2.png"),
-      require("@assets/sprites/1/attack/3.png"),
-      require("@assets/sprites/1/attack/4.png"),
-      require("@assets/sprites/1/attack/5.png"),
-      require("@assets/sprites/1/attack/6.png"),
-      require("@assets/sprites/1/attack/7.png"),
-      require("@assets/sprites/1/attack/8.png"),
-      require("@assets/sprites/1/attack/9.png"),
-      require("@assets/sprites/1/attack/10.png"),
-      require("@assets/sprites/1/attack/11.png"),
-      require("@assets/sprites/1/attack/12.png"),
-      require("@assets/sprites/1/attack/13.png"),
-      require("@assets/sprites/1/attack/14.png"),
-      require("@assets/sprites/1/attack/15.png"),
-      require("@assets/sprites/1/attack/16.png"),
-      require("@assets/sprites/1/attack/17.png"),
-      require("@assets/sprites/1/attack/18.png"),
-      require("@assets/sprites/1/attack/19.png"),
-      require("@assets/sprites/1/attack/20.png"),
-      require("@assets/sprites/1/attack/21.png"),
-      require("@assets/sprites/1/attack/22.png"),
-      require("@assets/sprites/1/attack/23.png"),
-      require("@assets/sprites/1/attack/24.png"),
-      require("@assets/sprites/1/attack/25.png"),
-      require("@assets/sprites/1/attack/26.png"),
-      require("@assets/sprites/1/attack/27.png"),
-    ],
-    []
-  );
-
-  const runFrames = useMemo(
-    () => [
-      require("@assets/sprites/1/run/0.png"),
-      require("@assets/sprites/1/run/1.png"),
-      require("@assets/sprites/1/run/2.png"),
-      require("@assets/sprites/1/run/3.png"),
-      require("@assets/sprites/1/run/4.png"),
-      require("@assets/sprites/1/run/5.png"),
-      require("@assets/sprites/1/run/6.png"),
-      require("@assets/sprites/1/run/7.png"),
-      require("@assets/sprites/1/run/8.png"),
-      require("@assets/sprites/1/run/9.png"),
-      require("@assets/sprites/1/run/10.png"),
-      require("@assets/sprites/1/run/11.png"),
-      require("@assets/sprites/1/run/12.png"),
-    ],
-    []
-  );
-
-  const hitFrames = useMemo(
-    () => [
-      require("@assets/sprites/1/hit/0.png"),
-      require("@assets/sprites/1/hit/1.png"),
-      require("@assets/sprites/1/hit/2.png"),
-      require("@assets/sprites/1/hit/3.png"),
-      require("@assets/sprites/1/hit/4.png"),
-      require("@assets/sprites/1/hit/5.png"),
-      require("@assets/sprites/1/hit/6.png"),
-    ],
-    []
-  );
-
   useEffect(() => {
     const getPermissions = async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === "granted");
     };
     getPermissions();
+    clearAllIntervals();
 
-    const interval = setInterval(() => {
-      setAttackerCurrentFrame(
-        (prevFrame) => (prevFrame + 1) % idleFrames.length
-      );
-    }, 30);
+    showBattlePreview();
 
-    // showBattlePreview();
-    return () => clearInterval(interval);
+    // Cleanup logic (if needed)
+    return () => {
+      // Clear any active animations or intervals inside showBattlePreview if they are global
+    };
   }, []);
 
   useFocusEffect(
@@ -197,35 +124,134 @@ const AttackTab = () => {
     return <Text>No access to camera</Text>;
   }
 
-  const showBattlePreview = () => {
-    // Set attacker action to attack
-    setAttackerAction("attack");
-    setAttackerFrames(attackFrames);
-    // Set defender action to hit
-    setDefenderAction("hit");
-    setDefenderFrames(hitFrames);
+  const showBattlePreview = async (): Promise<void> => {
+    const attackersFramesList = await preloadFrames(attacker.avatarId);
+    const defendersFramesList = await preloadFrames(defender.avatarId);
 
-    // Animate the battle
-    Animated.sequence([
-      Animated.timing(animation, {
-        toValue: 1, // Animate to full opacity
-        duration: 1000, // Animate over 1 second
-        useNativeDriver: true, // Use native driver for performance
-      }),
-      Animated.timing(animation, {
-        toValue: 0, // Animate to no opacity
-        duration: 1000, // Animate over 1 second
-        useNativeDriver: true, // Use native driver for performance
-      }),
-    ]).start(() => {
-      // Reset animation to 1 for next battle
-      animation.setValue(1);
-    });
+    if (
+      !attackersFramesList.idle ||
+      attackersFramesList.idle.length === 0 ||
+      !defendersFramesList.idle ||
+      defendersFramesList.idle.length === 0
+    ) {
+      console.error("No idle frames loaded. Aborting animation.");
+      return;
+    }
+
+    const calculateDuration = (frames: string[]): number =>
+      frames.length * FRAME_INTERVAL_MS;
+
+    const playIdlePhase = async () => {
+      setAttackerAction("idle");
+      setAttackerFrames(attackersFramesList.idle);
+      setDefenderAction("idle");
+      setDefenderFrames(defendersFramesList.idle);
+
+      setAttackerCurrentFrame(0);
+      setDefenderCurrentFrame(0);
+
+      // Increment frames for idle animation
+      const idleInterval = setInterval(() => {
+        setAttackerCurrentFrame(
+          (prev) => (prev + 1) % (attackersFramesList.idle?.length || 1)
+        );
+        setDefenderCurrentFrame(
+          (prev) => (prev + 1) % (defendersFramesList.idle?.length || 1)
+        );
+      }, FRAME_INTERVAL_MS);
+
+      await new Promise((resolve) => setTimeout(resolve, IDLE_DURATION_MS));
+      clearInterval(idleInterval); // Stop idle frame animation
+    };
+
+    const playRunPhase = async () => {
+      setAttackerAction("run");
+      setAttackerFrames(attackersFramesList.run || []);
+      setAttackerCurrentFrame(0);
+
+      const runDuration = calculateDuration(attackersFramesList.run || []);
+      const runInterval = setInterval(() => {
+        setAttackerCurrentFrame(
+          (prev) => (prev + 1) % (attackersFramesList.run?.length || 1)
+        );
+      }, FRAME_INTERVAL_MS);
+
+      Animated.timing(attackerPosition, {
+        toValue: 100,
+        duration: runDuration,
+        useNativeDriver: true,
+      }).start(() => clearInterval(runInterval));
+
+      await new Promise((resolve) => setTimeout(resolve, runDuration));
+    };
+
+    const playAttackPhase = async () => {
+      setAttackerAction("attack");
+      setAttackerFrames(attackersFramesList.attack || []);
+      setAttackerCurrentFrame(0);
+
+      const attackDuration = calculateDuration(
+        attackersFramesList.attack || []
+      );
+      const hitTriggerTime = attackDuration - 3 * FRAME_INTERVAL_MS;
+
+      const attackInterval = setInterval(() => {
+        setAttackerCurrentFrame(
+          (prev) => (prev + 1) % (attackersFramesList.attack?.length || 1)
+        );
+      }, FRAME_INTERVAL_MS);
+
+      setTimeout(() => {
+        setDefenderAction("hit");
+        setDefenderFrames(defendersFramesList.hit || []);
+        setDefenderCurrentFrame(0);
+
+        const hitInterval = setInterval(() => {
+          setDefenderCurrentFrame(
+            (prev) => (prev + 1) % (defendersFramesList.hit?.length || 1)
+          );
+        }, FRAME_INTERVAL_MS);
+
+        setTimeout(() => {
+          clearInterval(hitInterval);
+          setDefenderAction("idle");
+          setDefenderFrames(defendersFramesList.idle || []);
+          setDefenderCurrentFrame(0);
+        }, calculateDuration(defendersFramesList.hit || []));
+      }, hitTriggerTime);
+
+      await new Promise((resolve) => setTimeout(resolve, attackDuration));
+      clearInterval(attackInterval);
+    };
+
+    const playReturnPhase = async () => {
+      setAttackerAction("idle");
+      setAttackerFrames(attackersFramesList.idle || []);
+      setAttackerCurrentFrame(0);
+
+      Animated.timing(attackerPosition, {
+        toValue: 0,
+        duration: calculateDuration(attackersFramesList.idle || []),
+        useNativeDriver: true,
+      }).start();
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, calculateDuration(attackersFramesList.idle || []))
+      );
+    };
+
+    const playBattleSequence = async () => {
+      await playIdlePhase(); // Start with idle phase
+      await playRunPhase(); // Run towards the defender
+      await playAttackPhase(); // Perform the attack
+      await playReturnPhase(); // Return to starting position
+      await playIdlePhase(); // End with idle phase
+    };
+
+    while (true) {
+      await playBattleSequence(); // Loop the sequence
+    }
   };
-
-  // useEffect(() => {
-  //   showBattlePreview();
-  // }, [attackFrames, hitFrames]);
 
   return (
     <>
@@ -247,20 +273,37 @@ const AttackTab = () => {
       )}
       {!opponentData && (
         <ThemedView style={styles.wrapper}>
-          <Text>Opponent detected! Animating...</Text>
+          <Text>Battle Preview</Text>
           <View style={styles.spriteContainer}>
             <View className="attacker" style={[styles.attackerWrapper]}>
-              <View style={[styles.attackerContainer]}>
+              <Animated.View
+                style={[
+                  styles.attackerContainer,
+                  { transform: [{ translateX: attackerPosition }] },
+                ]}
+              >
                 <Animated.Image
-                  source={attackerFrames[attackerCurrentFrame]} // Display current frame
+                  source={{
+                    uri: getFrameWithFallback(
+                      attackerFrames,
+                      attackerCurrentFrame % (attackerFrames.length || 1),
+                      attackerFrames
+                    ),
+                  }}
                   style={[styles.attacker, { opacity: animation }]}
                 />
-              </View>
+              </Animated.View>
             </View>
             <View className="defender" style={[styles.defenderWrapper]}>
               <View style={[styles.defenderContainer]}>
                 <Animated.Image
-                  source={idleFrames[attackerCurrentFrame]} // Display current frame
+                  source={{
+                    uri: getFrameWithFallback(
+                      defenderFrames,
+                      defenderCurrentFrame % (defenderFrames.length || 1),
+                      defenderFrames
+                    ),
+                  }}
                   style={[styles.defender, { opacity: animation }]}
                 />
               </View>

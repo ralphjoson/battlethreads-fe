@@ -12,7 +12,7 @@ export interface Stats {
 
 export interface Avatar {
   username: string;
-  avatarId?: string;
+  avatarId: string;
   stats: Stats;
 }
 
@@ -24,7 +24,7 @@ export interface ActionSprites {
   attack?: string[];
   run?: string[];
   walk?: string[];
-  range?: string[];
+  shoot?: string[];
 }
 
 export type AvatarAction =
@@ -34,7 +34,7 @@ export type AvatarAction =
   | "attack"
   | "run"
   | "walk"
-  | "range";
+  | "shoot";
 
 // Interface for a collection of character sprites
 export interface CharacterSprites {
@@ -45,4 +45,14 @@ export interface CharacterSprites {
 export interface Position {
   x: number;
   y: number;
+}
+
+// Frame Counts and Preload Interfaces
+export type FrameCounts = Record<
+  string, // Avatar ID as string
+  Record<AvatarAction, number> // Action and corresponding frame count
+>;
+
+export interface LoadedFrames {
+  [key: string]: string[]; // Optional because not all actions may have frames
 }
