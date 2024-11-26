@@ -23,9 +23,17 @@ const AttackTab = () => {
   const animation = useRef(new Animated.Value(1)).current;
   const [attackerAction, setAttackerAction] = useState<AvatarAction>("attack");
   const [attackerFrames, setAttackerFrames] = useState<string[]>([]);
+  const [attackerFramesList, setAttackerFramesList] = useState<Record<
+    AvatarAction,
+    string[]
+  > | null>(null);
 
   const [defenderAction, setDefenderAction] = useState<AvatarAction>("idle");
   const [defenderFrames, setDefenderFrames] = useState<string[]>([]);
+  const [defenderFramesList, setDefenderFramesList] = useState<Record<
+    AvatarAction,
+    string[]
+  > | null>(null);
   const attackerPosition = useRef(new Animated.Value(0)).current;
   const intervalsRef = useRef<number[]>([]);
   const [attackerFallbackImage, setAttackerFallbackImage] =
@@ -76,10 +84,19 @@ const AttackTab = () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === "granted");
     };
+    const preloadRequiredFrames = async () => {
+      // Preload attacker and defender frames
+      const preloadedAttackerFrames = await preloadFrames(attacker.avatarId);
+      const preloadedDefenderFrames = await preloadFrames(defender.avatarId);
+
+      setAttackerFramesList(preloadedAttackerFrames);
+      setDefenderFramesList(preloadedDefenderFrames);
+    };
+
     getPermissions();
     clearAllIntervals();
-
-    showBattlePreview();
+    preloadRequiredFrames();
+    // showBattlePreview();
 
     // Cleanup logic (if needed)
     return () => {
@@ -125,14 +142,13 @@ const AttackTab = () => {
   }
 
   const showBattlePreview = async (): Promise<void> => {
-    const attackersFramesList = await preloadFrames(attacker.avatarId);
-    const defendersFramesList = await preloadFrames(defender.avatarId);
-
     if (
-      !attackersFramesList.idle ||
-      attackersFramesList.idle.length === 0 ||
-      !defendersFramesList.idle ||
-      defendersFramesList.idle.length === 0
+      !attackerFramesList ||
+      !attackerFramesList.idle ||
+      attackerFramesList.idle.length === 0 ||
+      !defenderFramesList ||
+      !defenderFramesList.idle ||
+      defenderFramesList.idle.length === 0
     ) {
       console.error("No idle frames loaded. Aborting animation.");
       return;
@@ -143,9 +159,9 @@ const AttackTab = () => {
 
     const playIdlePhase = async () => {
       setAttackerAction("idle");
-      setAttackerFrames(attackersFramesList.idle);
+      setAttackerFrames(attackerFramesList.idle);
       setDefenderAction("idle");
-      setDefenderFrames(defendersFramesList.idle);
+      setDefenderFrames(defenderFramesList.idle);
 
       setAttackerCurrentFrame(0);
       setDefenderCurrentFrame(0);
@@ -153,10 +169,10 @@ const AttackTab = () => {
       // Increment frames for idle animation
       const idleInterval = setInterval(() => {
         setAttackerCurrentFrame(
-          (prev) => (prev + 1) % (attackersFramesList.idle?.length || 1)
+          (prev) => (prev + 1) % (attackerFramesList.idle?.length || 1)
         );
         setDefenderCurrentFrame(
-          (prev) => (prev + 1) % (defendersFramesList.idle?.length || 1)
+          (prev) => (prev + 1) % (defenderFramesList.idle?.length || 1)
         );
       }, FRAME_INTERVAL_MS);
 
@@ -166,13 +182,13 @@ const AttackTab = () => {
 
     const playRunPhase = async () => {
       setAttackerAction("run");
-      setAttackerFrames(attackersFramesList.run || []);
+      setAttackerFrames(attackerFramesList.run || []);
       setAttackerCurrentFrame(0);
 
-      const runDuration = calculateDuration(attackersFramesList.run || []);
+      const runDuration = calculateDuration(attackerFramesList.run || []);
       const runInterval = setInterval(() => {
         setAttackerCurrentFrame(
-          (prev) => (prev + 1) % (attackersFramesList.run?.length || 1)
+          (prev) => (prev + 1) % (attackerFramesList.run?.length || 1)
         );
       }, FRAME_INTERVAL_MS);
 
@@ -187,37 +203,35 @@ const AttackTab = () => {
 
     const playAttackPhase = async () => {
       setAttackerAction("attack");
-      setAttackerFrames(attackersFramesList.attack || []);
+      setAttackerFrames(attackerFramesList.attack || []);
       setAttackerCurrentFrame(0);
 
-      const attackDuration = calculateDuration(
-        attackersFramesList.attack || []
-      );
+      const attackDuration = calculateDuration(attackerFramesList.attack || []);
       const hitTriggerTime = attackDuration - 3 * FRAME_INTERVAL_MS;
 
       const attackInterval = setInterval(() => {
         setAttackerCurrentFrame(
-          (prev) => (prev + 1) % (attackersFramesList.attack?.length || 1)
+          (prev) => (prev + 1) % (attackerFramesList.attack?.length || 1)
         );
       }, FRAME_INTERVAL_MS);
 
       setTimeout(() => {
         setDefenderAction("hit");
-        setDefenderFrames(defendersFramesList.hit || []);
+        setDefenderFrames(defenderFramesList.hit || []);
         setDefenderCurrentFrame(0);
 
         const hitInterval = setInterval(() => {
           setDefenderCurrentFrame(
-            (prev) => (prev + 1) % (defendersFramesList.hit?.length || 1)
+            (prev) => (prev + 1) % (defenderFramesList.hit?.length || 1)
           );
         }, FRAME_INTERVAL_MS);
 
         setTimeout(() => {
           clearInterval(hitInterval);
           setDefenderAction("idle");
-          setDefenderFrames(defendersFramesList.idle || []);
+          setDefenderFrames(defenderFramesList.idle || []);
           setDefenderCurrentFrame(0);
-        }, calculateDuration(defendersFramesList.hit || []));
+        }, calculateDuration(defenderFramesList.hit || []));
       }, hitTriggerTime);
 
       await new Promise((resolve) => setTimeout(resolve, attackDuration));
@@ -226,17 +240,17 @@ const AttackTab = () => {
 
     const playReturnPhase = async () => {
       setAttackerAction("idle");
-      setAttackerFrames(attackersFramesList.idle || []);
+      setAttackerFrames(attackerFramesList.idle || []);
       setAttackerCurrentFrame(0);
 
       Animated.timing(attackerPosition, {
         toValue: 0,
-        duration: calculateDuration(attackersFramesList.idle || []),
+        duration: calculateDuration(attackerFramesList.idle || []),
         useNativeDriver: true,
       }).start();
 
       await new Promise((resolve) =>
-        setTimeout(resolve, calculateDuration(attackersFramesList.idle || []))
+        setTimeout(resolve, calculateDuration(attackerFramesList.idle || []))
       );
     };
 
