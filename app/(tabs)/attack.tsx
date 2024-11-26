@@ -1,359 +1,394 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Text, StyleSheet, View, Animated } from "react-native";
-import { Camera, CameraView } from "expo-camera";
-import { useFocusEffect } from "@react-navigation/core";
+import React, { useEffect, useRef, useState, useMemo } from "react";
+import { Text, StyleSheet, View, Animated, Button } from "react-native";
 import { ThemedView } from "@/components/ThemedView";
 import { Avatar, AvatarAction } from "@/types/avatar";
-import { battleOutcome } from "@/functions/battle";
-import { Asset } from "expo-asset";
-import frameCounts from "@/lib/spriteFrameCounts";
-import {
-  getFrameWithFallback,
-  preloadFrames,
-} from "@/functions/sprite-animations";
+import { preloadFrames } from "@/functions/sprite-animations";
+import { BattleActions, BattleOutcome } from "@/types/battle";
+
+const attacker: Avatar = {
+  username: "Attacker",
+  avatarId: "2",
+  stats: {
+    attack: 25,
+    defense: 10,
+    criticalChance: 20,
+    criticalDamageModifier: 50,
+    dodgeChance: 15,
+    level: 1,
+    agility: 10,
+    health: 100,
+    experience: 0,
+  },
+};
+
+const defender: Avatar = {
+  username: "Defender",
+  avatarId: "3",
+  stats: {
+    attack: 255,
+    defense: 255,
+    criticalChance: 50,
+    criticalDamageModifier: 100,
+    dodgeChance: 40,
+    level: 99,
+    agility: 255,
+    health: 9999,
+    experience: 0,
+  },
+};
+
+const sampleBattleResult: BattleOutcome = {
+  winner: attacker,
+  loser: defender,
+  numberOfTurns: 5,
+  actions: [
+    {
+      attacker: attacker,
+      defender: defender,
+      damageDealt: 23,
+      attackerHealth: 100,
+      defenderHealth: 77,
+      isCritical: false,
+      isDodged: false,
+    },
+    {
+      attacker: defender,
+      defender: attacker,
+      damageDealt: 0,
+      attackerHealth: 77,
+      defenderHealth: 100,
+      isCritical: false,
+      isDodged: false,
+    },
+  ],
+};
 
 const AttackTab = () => {
-  const IDLE_DURATION_MS = 5000; // Configurable idle duration in milliseconds
-  const FRAME_INTERVAL_MS = 50; // Time each frame is displayed in milliseconds
+  const IDLE_DURATION_MS = 3000; // Configurable idle duration in milliseconds
+  const FRAME_INTERVAL_MS = 70;
 
-  const [hasPermission, setHasPermission] = useState<boolean>(false);
-  const [opponentData, setOpponentData] = useState<any>(null);
+  const [attackerAction, setAttackerAction] = useState<AvatarAction>("idle");
+  const [defenderAction, setDefenderAction] = useState<AvatarAction>("idle");
+
   const [attackerCurrentFrame, setAttackerCurrentFrame] = useState(0);
   const [defenderCurrentFrame, setDefenderCurrentFrame] = useState(0);
-  const animation = useRef(new Animated.Value(1)).current;
-  const [attackerAction, setAttackerAction] = useState<AvatarAction>("attack");
-  const [attackerFrames, setAttackerFrames] = useState<string[]>([]);
   const [attackerFramesList, setAttackerFramesList] = useState<Record<
     AvatarAction,
     string[]
   > | null>(null);
-
-  const [defenderAction, setDefenderAction] = useState<AvatarAction>("idle");
-  const [defenderFrames, setDefenderFrames] = useState<string[]>([]);
   const [defenderFramesList, setDefenderFramesList] = useState<Record<
     AvatarAction,
     string[]
   > | null>(null);
+
   const attackerPosition = useRef(new Animated.Value(0)).current;
-  const intervalsRef = useRef<number[]>([]);
-  const [attackerFallbackImage, setAttackerFallbackImage] =
-    useState<string>("");
-  const [defenderFallbackImage, setDefenderFallbackImage] =
-    useState<string>("");
+  const defenderPosition = useRef(new Animated.Value(0)).current;
+  const intervalsRef = useRef<NodeJS.Timeout[]>([]);
+
+  const [isPreloaded, setIsPreloaded] = useState(false);
+
+  const preloadFramesForAllAvatars = async () => {
+    try {
+      const [attackerFrames, defenderFrames] = await Promise.all([
+        preloadFrames(attacker.avatarId),
+        preloadFrames(defender.avatarId),
+      ]);
+
+      setAttackerFramesList(attackerFrames);
+      setDefenderFramesList(defenderFrames);
+
+      setIsPreloaded(true); // Mark as preloaded
+      console.log("All assets preloaded.");
+    } catch (error) {
+      console.error("Error preloading assets:", error);
+      setIsPreloaded(false); // Handle failure scenario
+    }
+  };
 
   const clearAllIntervals = () => {
-    intervalsRef.current.forEach((intervalId) => clearInterval(intervalId));
-    intervalsRef.current = []; // Reset the stored intervals
-  };
-
-  // Sample battle outcome function
-  const attacker: Avatar = {
-    username: "Attacker",
-    avatarId: "2",
-    stats: {
-      attack: 25,
-      defense: 10,
-      criticalChance: 20,
-      criticalDamageModifier: 50,
-      dodgeChance: 15,
-      level: 1,
-      agility: 10,
-      health: 100,
-      experience: 0,
-    },
-  };
-
-  const defender: Avatar = {
-    username: "Defender",
-    avatarId: "3",
-    stats: {
-      attack: 255,
-      defense: 255,
-      criticalChance: 50,
-      criticalDamageModifier: 100,
-      dodgeChance: 40,
-      level: 99,
-      agility: 255,
-      health: 9999,
-      experience: 0,
-    },
+    intervalsRef.current.forEach(clearInterval);
+    intervalsRef.current = [];
   };
 
   useEffect(() => {
-    const getPermissions = async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === "granted");
-    };
-    const preloadRequiredFrames = async () => {
-      // Preload attacker and defender frames
-      const preloadedAttackerFrames = await preloadFrames(attacker.avatarId);
-      const preloadedDefenderFrames = await preloadFrames(defender.avatarId);
+    preloadFramesForAllAvatars();
 
-      setAttackerFramesList(preloadedAttackerFrames);
-      setDefenderFramesList(preloadedDefenderFrames);
-    };
-
-    getPermissions();
-    clearAllIntervals();
-    preloadRequiredFrames();
-    // showBattlePreview();
-
-    // Cleanup logic (if needed)
-    return () => {
-      // Clear any active animations or intervals inside showBattlePreview if they are global
-    };
+    return () => clearAllIntervals();
   }, []);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      setOpponentData(null);
-    }, [])
-  );
-
-  // Frame animation effect
-  useEffect(() => {
-    if (opponentData) battleOutcome(attacker, defender);
-  }, [opponentData]);
-
-  const handleBarcodeScanned = (event: { data: string; type: string }) => {
-    try {
-      const parsedData = JSON.parse(event.data);
-      setOpponentData(parsedData);
-      console.log("Opponent detected:", parsedData);
-    } catch (error) {
-      console.error("Failed to parse JSON:", error);
-    }
+  const calculateFrameInterval = (totalDuration: number, numFrames: number) => {
+    return totalDuration / numFrames; // ms per frame
   };
 
-  const handleMountError = (error: Error | { message: string }) => {
-    if (typeof error === "string") {
-      console.error("Camera mount error:", error);
-    } else {
-      console.error("Camera mount error:", error.message);
-    }
-  };
+  const playAnimation = (
+    setAction: React.Dispatch<React.SetStateAction<AvatarAction>>,
+    setCurrentFrame: React.Dispatch<React.SetStateAction<number>>,
+    action: AvatarAction,
+    frames: string[],
+    totalDuration: number
+  ): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!frames || frames.length === 0) {
+        resolve();
+        return;
+      }
 
-  if (hasPermission === null) {
-    return <Text>Requesting camera permission...</Text>;
-  }
+      const frameInterval = calculateFrameInterval(
+        totalDuration,
+        frames.length
+      );
 
-  if (hasPermission === false) {
-    return <Text>No access to camera</Text>;
-  }
-
-  const showBattlePreview = async (): Promise<void> => {
-    if (
-      !attackerFramesList ||
-      !attackerFramesList.idle ||
-      attackerFramesList.idle.length === 0 ||
-      !defenderFramesList ||
-      !defenderFramesList.idle ||
-      defenderFramesList.idle.length === 0
-    ) {
-      console.error("No idle frames loaded. Aborting animation.");
-      return;
-    }
-
-    const calculateDuration = (frames: string[]): number =>
-      frames.length * FRAME_INTERVAL_MS;
-
-    const playIdlePhase = async () => {
-      setAttackerAction("idle");
-      setAttackerFrames(attackerFramesList.idle);
-      setDefenderAction("idle");
-      setDefenderFrames(defenderFramesList.idle);
-
-      setAttackerCurrentFrame(0);
-      setDefenderCurrentFrame(0);
-
-      // Increment frames for idle animation
-      const idleInterval = setInterval(() => {
-        setAttackerCurrentFrame(
-          (prev) => (prev + 1) % (attackerFramesList.idle?.length || 1)
-        );
-        setDefenderCurrentFrame(
-          (prev) => (prev + 1) % (defenderFramesList.idle?.length || 1)
-        );
-      }, FRAME_INTERVAL_MS);
-
-      await new Promise((resolve) => setTimeout(resolve, IDLE_DURATION_MS));
-      clearInterval(idleInterval); // Stop idle frame animation
-    };
-
-    const playRunPhase = async () => {
-      setAttackerAction("run");
-      setAttackerFrames(attackerFramesList.run || []);
-      setAttackerCurrentFrame(0);
-
-      const runDuration = calculateDuration(attackerFramesList.run || []);
-      const runInterval = setInterval(() => {
-        setAttackerCurrentFrame(
-          (prev) => (prev + 1) % (attackerFramesList.run?.length || 1)
-        );
-      }, FRAME_INTERVAL_MS);
-
-      Animated.timing(attackerPosition, {
-        toValue: 100,
-        duration: runDuration,
-        useNativeDriver: true,
-      }).start(() => clearInterval(runInterval));
-
-      await new Promise((resolve) => setTimeout(resolve, runDuration));
-    };
-
-    const playAttackPhase = async () => {
-      setAttackerAction("attack");
-      setAttackerFrames(attackerFramesList.attack || []);
-      setAttackerCurrentFrame(0);
-
-      const attackDuration = calculateDuration(attackerFramesList.attack || []);
-      const hitTriggerTime = attackDuration - 3 * FRAME_INTERVAL_MS;
-
-      const attackInterval = setInterval(() => {
-        setAttackerCurrentFrame(
-          (prev) => (prev + 1) % (attackerFramesList.attack?.length || 1)
-        );
-      }, FRAME_INTERVAL_MS);
+      setAction(action);
+      const interval = setInterval(() => {
+        setCurrentFrame((prev) => (prev + 1) % frames.length);
+      }, frameInterval);
 
       setTimeout(() => {
-        setDefenderAction("hit");
-        setDefenderFrames(defenderFramesList.hit || []);
-        setDefenderCurrentFrame(0);
+        clearInterval(interval);
+        resolve();
+      }, totalDuration);
+    });
+  };
 
-        const hitInterval = setInterval(() => {
-          setDefenderCurrentFrame(
-            (prev) => (prev + 1) % (defenderFramesList.hit?.length || 1)
-          );
-        }, FRAME_INTERVAL_MS);
+  const calculateDuration = (frames: string[]): number => {
+    return frames.length * FRAME_INTERVAL_MS;
+  };
 
-        setTimeout(() => {
-          clearInterval(hitInterval);
-          setDefenderAction("idle");
-          setDefenderFrames(defenderFramesList.idle || []);
-          setDefenderCurrentFrame(0);
-        }, calculateDuration(defenderFramesList.hit || []));
-      }, hitTriggerTime);
+  interface PhaseParams {
+    framesList: Record<AvatarAction, string[]> | null;
+    setAction: React.Dispatch<React.SetStateAction<AvatarAction>>;
+    setCurrentFrame: React.Dispatch<React.SetStateAction<number>>;
+    position?: Animated.Value; // Optional, only required for runPhase
+  }
 
-      await new Promise((resolve) => setTimeout(resolve, attackDuration));
-      clearInterval(attackInterval);
+  const startIdleLoop = (
+    actor: Avatar,
+    setAction: React.Dispatch<React.SetStateAction<AvatarAction>>,
+    setCurrentFrame: React.Dispatch<React.SetStateAction<number>>,
+    framesList: Record<AvatarAction, string[]> | null
+  ) => {
+    if (!framesList?.idle) return;
+
+    const idleInterval = setInterval(() => {
+      setCurrentFrame((prev) => (prev + 1) % framesList.idle.length);
+    }, calculateFrameInterval(IDLE_DURATION_MS, framesList.idle.length));
+
+    setAction("idle");
+    intervalsRef.current.push(idleInterval);
+  };
+
+  const stopIdleLoop = () => {
+    clearAllIntervals(); // Stop all idle animations
+  };
+
+  const runPhase = async (actor: Avatar, params: PhaseParams) => {
+    stopIdleLoop(); // Pause idle while running
+
+    const { framesList, setAction, setCurrentFrame, position } = params;
+
+    if (!framesList?.run || !position) return;
+
+    const runDuration = calculateDuration(framesList.run);
+    const targetPosition = actor === attacker ? 100 : -100; // Attacker moves right, Defender moves left
+
+    setAction("run");
+
+    Animated.timing(position, {
+      toValue: targetPosition,
+      duration: runDuration,
+      useNativeDriver: true,
+    }).start();
+
+    await playAnimation(
+      setAction,
+      setCurrentFrame,
+      "run",
+      framesList.run,
+      runDuration
+    );
+
+    Animated.timing(position, {
+      toValue: 0, // Back to the original position
+      duration: runDuration,
+      useNativeDriver: true,
+    }).start();
+
+    startIdleLoop(actor, setAction, setCurrentFrame, framesList); // Resume idle after run
+  };
+
+  const attackPhase = async (actor: Avatar, params: PhaseParams) => {
+    stopIdleLoop(); // Pause idle while attacking
+
+    const { framesList, setAction, setCurrentFrame } = params;
+
+    if (!framesList?.attack) return;
+
+    const attackDuration = calculateDuration(framesList.attack);
+
+    await playAnimation(
+      setAction,
+      setCurrentFrame,
+      "attack",
+      framesList.attack,
+      attackDuration
+    );
+
+    startIdleLoop(actor, setAction, setCurrentFrame, framesList); // Resume idle after attack
+  };
+
+  const hitPhase = async (actor: Avatar, params: PhaseParams) => {
+    stopIdleLoop(); // Pause idle while being hit
+
+    const { framesList, setAction, setCurrentFrame } = params;
+
+    if (!framesList?.hit) return;
+
+    const hitDuration = calculateDuration(framesList.hit);
+
+    await playAnimation(
+      setAction,
+      setCurrentFrame,
+      "hit",
+      framesList.hit,
+      hitDuration
+    );
+
+    startIdleLoop(actor, setAction, setCurrentFrame, framesList); // Resume idle after hit
+  };
+
+  const showBattlePreview = async (actions: BattleActions[]) => {
+    const getPhaseParams = (actor: Avatar): PhaseParams => {
+      const framesList =
+        actor === attacker ? attackerFramesList : defenderFramesList;
+      const setAction =
+        actor === attacker ? setAttackerAction : setDefenderAction;
+      const setCurrentFrame =
+        actor === attacker ? setAttackerCurrentFrame : setDefenderCurrentFrame;
+      const position = actor === attacker ? attackerPosition : defenderPosition;
+
+      return {
+        framesList,
+        setAction,
+        setCurrentFrame,
+        position,
+      };
     };
 
-    const playReturnPhase = async () => {
-      setAttackerAction("idle");
-      setAttackerFrames(attackerFramesList.idle || []);
-      setAttackerCurrentFrame(0);
-
-      Animated.timing(attackerPosition, {
-        toValue: 0,
-        duration: calculateDuration(attackerFramesList.idle || []),
-        useNativeDriver: true,
-      }).start();
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, calculateDuration(attackerFramesList.idle || []))
+    // Start idle loops
+    if (attackerFramesList?.idle) {
+      startIdleLoop(
+        attacker,
+        setAttackerAction,
+        setAttackerCurrentFrame,
+        attackerFramesList
       );
-    };
+    }
 
-    const playBattleSequence = async () => {
-      await playIdlePhase(); // Start with idle phase
-      await playRunPhase(); // Run towards the defender
-      await playAttackPhase(); // Perform the attack
-      await playReturnPhase(); // Return to starting position
-      await playIdlePhase(); // End with idle phase
-    };
+    if (defenderFramesList?.idle) {
+      startIdleLoop(
+        defender,
+        setDefenderAction,
+        setDefenderCurrentFrame,
+        defenderFramesList
+      );
+    }
 
-    while (true) {
-      await playBattleSequence(); // Loop the sequence
+    for (const action of actions) {
+      const attackerParams = getPhaseParams(action.attacker);
+      const defenderParams = getPhaseParams(action.defender);
+
+      // Attacker runs
+      await runPhase(action.attacker, attackerParams);
+
+      // Attacker attacks
+      await attackPhase(action.attacker, attackerParams);
+
+      if (action.isDodged) {
+        // Defender dodges
+        await runPhase(action.defender, defenderParams);
+      } else {
+        // Defender gets hit
+        await hitPhase(action.defender, defenderParams);
+      }
+
+      // Defender runs before attacking (if it's their turn)
+      if (action.attacker === defender) {
+        await runPhase(action.attacker, defenderParams);
+        await attackPhase(action.attacker, defenderParams);
+      }
     }
   };
 
+  const preloadedAttackerFrames = useMemo(() => {
+    if (!attackerFramesList) return null;
+    return attackerFramesList[attackerAction] || attackerFramesList.idle || [];
+  }, [attackerFramesList, attackerAction]);
+
+  const preloadedDefenderFrames = useMemo(() => {
+    if (!defenderFramesList) return null;
+    return defenderFramesList[defenderAction] || defenderFramesList.idle || [];
+  }, [defenderFramesList, defenderAction]);
+
   return (
-    <>
-      {opponentData && (
-        <ThemedView style={styles.frame}>
-          <ThemedView style={styles.frameWrapper}>
-            {/* <CameraView
-              style={styles.camera}
-              barcodeScannerSettings={{
-                barcodeTypes: ["qr"],
+    <ThemedView style={styles.wrapper}>
+      <Text>Battle Preview</Text>
+      <View style={styles.spriteContainer}>
+        <View style={styles.attackerWrapper}>
+          <Animated.View
+            style={[
+              styles.attackerContainer,
+              { transform: [{ translateX: attackerPosition }] },
+            ]}
+          >
+            <Animated.Image
+              source={{
+                uri:
+                  preloadedAttackerFrames?.[attackerCurrentFrame] ||
+                  preloadedAttackerFrames?.[0] ||
+                  "",
               }}
-              onBarcodeScanned={handleBarcodeScanned}
-              onCameraReady={() => console.log("Camera is ready")}
-              onMountError={handleMountError}
-              facing="back"
-            /> */}
-          </ThemedView>
-        </ThemedView>
-      )}
-      {!opponentData && (
-        <ThemedView style={styles.wrapper}>
-          <Text>Battle Preview</Text>
-          <View style={styles.spriteContainer}>
-            <View className="attacker" style={[styles.attackerWrapper]}>
-              <Animated.View
-                style={[
-                  styles.attackerContainer,
-                  { transform: [{ translateX: attackerPosition }] },
-                ]}
-              >
-                <Animated.Image
-                  source={{
-                    uri: getFrameWithFallback(
-                      attackerFrames,
-                      attackerCurrentFrame % (attackerFrames.length || 1),
-                      attackerFrames
-                    ),
-                  }}
-                  style={[styles.attacker, { opacity: animation }]}
-                />
-              </Animated.View>
-            </View>
-            <View className="defender" style={[styles.defenderWrapper]}>
-              <View style={[styles.defenderContainer]}>
-                <Animated.Image
-                  source={{
-                    uri: getFrameWithFallback(
-                      defenderFrames,
-                      defenderCurrentFrame % (defenderFrames.length || 1),
-                      defenderFrames
-                    ),
-                  }}
-                  style={[styles.defender, { opacity: animation }]}
-                />
-              </View>
-            </View>
-          </View>
-        </ThemedView>
-      )}
-    </>
+              style={styles.attacker}
+            />
+          </Animated.View>
+        </View>
+        <View style={styles.defenderWrapper}>
+          <Animated.View
+            style={[
+              styles.defenderContainer,
+              { transform: [{ translateX: defenderPosition }] },
+            ]}
+          >
+            <Animated.Image
+              source={{
+                uri:
+                  preloadedDefenderFrames?.[defenderCurrentFrame] ||
+                  preloadedDefenderFrames?.[0] ||
+                  "",
+              }}
+              style={styles.defender}
+            />
+          </Animated.View>
+        </View>
+      </View>
+      {
+        isPreloaded && (
+          <Button
+            title="Start Battle"
+            onPress={() => showBattlePreview(sampleBattleResult.actions)}
+          />
+        ) // Show button only when assets are preloaded
+      }
+    </ThemedView>
   );
 };
 
 const styles = StyleSheet.create({
-  fullScreen: {
-    width: "100%",
-    height: "100%",
-  },
   wrapper: {
     backgroundColor: "white",
     width: "100%",
     height: "100%",
-    color: "black",
     justifyContent: "center",
     alignItems: "center",
-  },
-  frame: {
-    backgroundColor: "white",
-    padding: 40,
-    height: "100%",
-  },
-  frameWrapper: {
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  camera: {
-    width: "100%",
-    height: "90%",
   },
   spriteContainer: {
     marginTop: 20,
@@ -365,11 +400,8 @@ const styles = StyleSheet.create({
   },
   attackerWrapper: {
     width: "40%",
-    height: "50%",
+    height: "100%",
     position: "absolute",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
     left: 0,
   },
   attackerContainer: {
@@ -380,15 +412,12 @@ const styles = StyleSheet.create({
   attacker: {
     width: "100%",
     height: "100%",
-    resizeMode: "contain", // Maintain aspect ratio
+    resizeMode: "contain",
   },
   defenderWrapper: {
     width: "40%",
     height: "100%",
     position: "absolute",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-end",
     right: 0,
   },
   defenderContainer: {
@@ -399,7 +428,7 @@ const styles = StyleSheet.create({
   defender: {
     width: "100%",
     height: "100%",
-    resizeMode: "contain", // Maintain aspect ratio
+    resizeMode: "contain",
     transform: [{ scaleX: -1 }],
   },
 });
