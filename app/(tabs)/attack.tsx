@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
-import { Text, StyleSheet, View, Animated, Button } from "react-native";
-import { ThemedView } from "@/components/ThemedView";
-import { Avatar, AvatarAction } from "@/types/avatar";
-import { preloadFrames } from "@/functions/sprite-animations";
-import { BattleActions, BattleOutcome } from "@/types/battle";
+import { battleOutcome } from "@/functions/battle";
+import { Avatar } from "@/types/avatar";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, View, Image, Button } from "react-native";
+import { GameEngine } from "react-native-game-engine";
 
 const attacker: Avatar = {
   username: "Attacker",
@@ -37,400 +36,365 @@ const defender: Avatar = {
   },
 };
 
-const sampleBattleResult: BattleOutcome = {
-  winner: attacker,
-  loser: defender,
-  numberOfTurns: 5,
-  actions: [
+type SpriteActions = "attack" | "run" | "idle" | "roll";
+
+const SPRITE_CONFIGS: Record<
+  string,
+  Record<
+    SpriteActions,
     {
-      attacker: attacker,
-      defender: defender,
-      damageDealt: 23,
-      attackerHealth: 100,
-      defenderHealth: 77,
-      isCritical: false,
-      isDodged: false,
+      image: any;
+      columns: number;
+      rows: number;
+      width: number;
+      height: number;
+      frameCount: number;
+      frameDuration: number;
+    }
+  >
+> = {
+  attacker: {
+    attack: {
+      image: require("@assets/sprites/knight-a/_AttackCombo2hit.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 100,
     },
-    {
-      attacker: defender,
-      defender: attacker,
-      damageDealt: 0,
-      attackerHealth: 77,
-      defenderHealth: 100,
-      isCritical: false,
-      isDodged: false,
+    run: {
+      image: require("@assets/sprites/knight-a/_Run.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 100,
     },
-  ],
+    idle: {
+      image: require("@assets/sprites/knight-a/_Idle.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 100,
+    },
+    roll: {
+      image: require("@assets/sprites/knight-a/_Roll.png"),
+      columns: 12,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 12,
+      frameDuration: 100,
+    },
+  },
+  defender: {
+    attack: {
+      image: require("@assets/sprites/knight-b/_AttackCombo.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 100,
+    },
+    run: {
+      image: require("@assets/sprites/knight-b/_Run.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 100,
+    },
+    idle: {
+      image: require("@assets/sprites/knight-b/_Idle.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 100,
+    },
+    roll: {
+      image: require("@assets/sprites/knight-b/_Roll.png"),
+      columns: 12,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 12,
+      frameDuration: 100,
+    },
+  },
 };
 
-const AttackTab = () => {
-  const IDLE_DURATION_MS = 3000; // Configurable idle duration in milliseconds
-  const FRAME_INTERVAL_MS = 70;
-
-  const [attackerAction, setAttackerAction] = useState<AvatarAction>("idle");
-  const [defenderAction, setDefenderAction] = useState<AvatarAction>("idle");
-
-  const [attackerCurrentFrame, setAttackerCurrentFrame] = useState(0);
-  const [defenderCurrentFrame, setDefenderCurrentFrame] = useState(0);
-  const [attackerFramesList, setAttackerFramesList] = useState<Record<
-    AvatarAction,
-    string[]
-  > | null>(null);
-  const [defenderFramesList, setDefenderFramesList] = useState<Record<
-    AvatarAction,
-    string[]
-  > | null>(null);
-
-  const attackerPosition = useRef(new Animated.Value(0)).current;
-  const defenderPosition = useRef(new Animated.Value(0)).current;
-  const intervalsRef = useRef<NodeJS.Timeout[]>([]);
-
-  const [isPreloaded, setIsPreloaded] = useState(false);
-
-  const preloadFramesForAllAvatars = async () => {
-    try {
-      const [attackerFrames, defenderFrames] = await Promise.all([
-        preloadFrames(attacker.avatarId),
-        preloadFrames(defender.avatarId),
-      ]);
-
-      setAttackerFramesList(attackerFrames);
-      setDefenderFramesList(defenderFrames);
-
-      setIsPreloaded(true); // Mark as preloaded
-      console.log("All assets preloaded.");
-    } catch (error) {
-      console.error("Error preloading assets:", error);
-      setIsPreloaded(false); // Handle failure scenario
-    }
+const AttackerSprite = ({
+  currentFrame,
+  position,
+}: {
+  currentFrame: number;
+  position: number[];
+}) => {
+  const config = SPRITE_CONFIGS.attacker["idle"];
+  const getFramePosition = (frame: number) => {
+    const row = Math.floor(frame / config.columns);
+    const col = frame % config.columns;
+    return { x: col * config.width, y: row * config.height };
   };
 
-  const clearAllIntervals = () => {
-    intervalsRef.current.forEach(clearInterval);
-    intervalsRef.current = [];
+  const { x, y } = getFramePosition(currentFrame);
+  let test = 10;
+  // set x position to random from 50 to 100 every 50ms
+  setInterval(() => {
+    test = Math.floor(Math.random() * (50 - 10 + 1)) + 10;
+  }, 50);
+  return (
+    <View
+      style={[
+        styles.spriteContainer,
+        {
+          width: config.width,
+          height: config.height,
+          left: position ? position[0] : 50,
+          top: position ? position[1] : 100,
+        },
+      ]}
+    >
+      <Image
+        source={config.image}
+        style={{
+          position: "absolute",
+          width: config.columns * config.width,
+          height: config.rows * config.height,
+          left: -x,
+          top: -y,
+        }}
+      />
+    </View>
+  );
+};
+
+const DefenderSprite = ({
+  currentFrame,
+  position,
+}: {
+  currentFrame: number;
+  position: number[];
+}) => {
+  const config = SPRITE_CONFIGS.defender["idle"];
+  const getFramePosition = (frame: number) => {
+    const row = Math.floor(frame / config.columns);
+    const col = frame % config.columns;
+    return { x: col * config.width, y: row * config.height };
   };
 
-  useEffect(() => {
-    preloadFramesForAllAvatars();
+  const { x, y } = getFramePosition(currentFrame);
 
-    return () => clearAllIntervals();
-  }, []);
+  return (
+    <View
+      style={[
+        styles.spriteContainer,
+        {
+          width: config.width,
+          height: config.height,
+          left: position ? position[0] : 200,
+          top: position ? position[1] : 100,
+          transform: "scaleX(-1)",
+        },
+      ]}
+    >
+      <Image
+        source={config.image}
+        style={{
+          position: "absolute",
+          width: config.columns * config.width,
+          height: config.rows * config.height,
+          left: -x,
+          top: -y,
+        }}
+      />
+    </View>
+  );
+};
 
-  const calculateFrameInterval = (totalDuration: number, numFrames: number) => {
-    return totalDuration / numFrames; // ms per frame
-  };
+const AnimatedSprite = () => {
+  const [attackerFrame, setAttackerFrame] = useState(0);
+  const [defenderFrame, setDefenderFrame] = useState(0);
+  const [currentAction, setCurrentAction] = useState<number>(0);
+  const [animationConfig, setAnimationConfig] = useState<
+    Record<"attacker" | "defender", SpriteActions>
+  >({
+    attacker: "idle",
+    defender: "idle",
+  });
 
-  const playAnimation = (
-    setAction: React.Dispatch<React.SetStateAction<AvatarAction>>,
-    setCurrentFrame: React.Dispatch<React.SetStateAction<number>>,
-    action: AvatarAction,
-    frames: string[],
-    totalDuration: number
-  ): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!frames || frames.length === 0) {
-        resolve();
-        return;
-      }
-
-      const frameInterval = calculateFrameInterval(
-        totalDuration,
-        frames.length
-      );
-
-      setAction(action);
-      const interval = setInterval(() => {
-        setCurrentFrame((prev) => (prev + 1) % frames.length);
-      }, frameInterval);
-
-      setTimeout(() => {
-        clearInterval(interval);
-        resolve();
-      }, totalDuration);
-    });
-  };
-
-  const calculateDuration = (frames: string[]): number => {
-    return frames.length * FRAME_INTERVAL_MS;
-  };
-
-  interface PhaseParams {
-    framesList: Record<AvatarAction, string[]> | null;
-    setAction: React.Dispatch<React.SetStateAction<AvatarAction>>;
-    setCurrentFrame: React.Dispatch<React.SetStateAction<number>>;
-    position?: Animated.Value; // Optional, only required for runPhase
-  }
-
-  const startIdleLoop = (
-    actor: Avatar,
-    setAction: React.Dispatch<React.SetStateAction<AvatarAction>>,
-    setCurrentFrame: React.Dispatch<React.SetStateAction<number>>,
-    framesList: Record<AvatarAction, string[]> | null
-  ) => {
-    if (!framesList?.idle) return;
-
-    const idleInterval = setInterval(() => {
-      setCurrentFrame((prev) => (prev + 1) % framesList.idle.length);
-    }, calculateFrameInterval(IDLE_DURATION_MS, framesList.idle.length));
-
-    setAction("idle");
-    intervalsRef.current.push(idleInterval);
-  };
-
-  const stopIdleLoop = () => {
-    clearAllIntervals(); // Stop all idle animations
-  };
-
-  const runPhase = async (actor: Avatar, params: PhaseParams) => {
-    stopIdleLoop(); // Pause idle while running
-
-    const { framesList, setAction, setCurrentFrame, position } = params;
-
-    if (!framesList?.run || !position) return;
-
-    const runDuration = calculateDuration(framesList.run);
-    const targetPosition = actor === attacker ? 100 : -100; // Attacker moves right, Defender moves left
-
-    setAction("run");
-
-    Animated.timing(position, {
-      toValue: targetPosition,
-      duration: runDuration,
-      useNativeDriver: true,
-    }).start();
-
-    await playAnimation(
-      setAction,
-      setCurrentFrame,
-      "run",
-      framesList.run,
-      runDuration
-    );
-
-    Animated.timing(position, {
-      toValue: 0, // Back to the original position
-      duration: runDuration,
-      useNativeDriver: true,
-    }).start();
-
-    startIdleLoop(actor, setAction, setCurrentFrame, framesList); // Resume idle after run
-  };
-
-  const attackPhase = async (actor: Avatar, params: PhaseParams) => {
-    stopIdleLoop(); // Pause idle while attacking
-
-    const { framesList, setAction, setCurrentFrame } = params;
-
-    if (!framesList?.attack) return;
-
-    const attackDuration = calculateDuration(framesList.attack);
-
-    await playAnimation(
-      setAction,
-      setCurrentFrame,
-      "attack",
-      framesList.attack,
-      attackDuration
-    );
-
-    startIdleLoop(actor, setAction, setCurrentFrame, framesList); // Resume idle after attack
-  };
-
-  const hitPhase = async (actor: Avatar, params: PhaseParams) => {
-    stopIdleLoop(); // Pause idle while being hit
-
-    const { framesList, setAction, setCurrentFrame } = params;
-
-    if (!framesList?.hit) return;
-
-    const hitDuration = calculateDuration(framesList.hit);
-
-    await playAnimation(
-      setAction,
-      setCurrentFrame,
-      "hit",
-      framesList.hit,
-      hitDuration
-    );
-
-    startIdleLoop(actor, setAction, setCurrentFrame, framesList); // Resume idle after hit
-  };
-
-  const showBattlePreview = async (actions: BattleActions[]) => {
-    const getPhaseParams = (actor: Avatar): PhaseParams => {
-      const framesList =
-        actor === attacker ? attackerFramesList : defenderFramesList;
-      const setAction =
-        actor === attacker ? setAttackerAction : setDefenderAction;
-      const setCurrentFrame =
-        actor === attacker ? setAttackerCurrentFrame : setDefenderCurrentFrame;
-      const position = actor === attacker ? attackerPosition : defenderPosition;
-
+  const processActions = async (actions: any[]) => {
+    const getPhaseParams = (actor: Avatar) => {
+      const isAttacker = actor === attacker;
       return {
-        framesList,
-        setAction,
-        setCurrentFrame,
-        position,
+        framesList: isAttacker
+          ? SPRITE_CONFIGS.attacker
+          : SPRITE_CONFIGS.defender,
+        setAction: (action: SpriteActions) =>
+          setAnimationConfig((prev) => ({
+            ...prev,
+            [isAttacker ? "attacker" : "defender"]: action,
+          })),
       };
     };
 
-    // Start idle loops
-    if (attackerFramesList?.idle) {
-      startIdleLoop(
-        attacker,
-        setAttackerAction,
-        setAttackerCurrentFrame,
-        attackerFramesList
-      );
-    }
-
-    if (defenderFramesList?.idle) {
-      startIdleLoop(
-        defender,
-        setDefenderAction,
-        setDefenderCurrentFrame,
-        defenderFramesList
-      );
-    }
+    setAnimationConfig({
+      attacker: "idle",
+      defender: "idle",
+    });
 
     for (const action of actions) {
       const attackerParams = getPhaseParams(action.attacker);
       const defenderParams = getPhaseParams(action.defender);
 
       // Attacker runs
-      await runPhase(action.attacker, attackerParams);
+      attackerParams.setAction("run");
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          attackerParams.framesList.run.frameCount *
+            attackerParams.framesList.run.frameDuration
+        )
+      );
 
       // Attacker attacks
-      await attackPhase(action.attacker, attackerParams);
+      attackerParams.setAction("attack");
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          attackerParams.framesList.attack.frameCount *
+            attackerParams.framesList.attack.frameDuration
+        )
+      );
 
       if (action.isDodged) {
         // Defender dodges
-        await runPhase(action.defender, defenderParams);
+        defenderParams.setAction("roll");
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            defenderParams.framesList.roll.frameCount *
+              defenderParams.framesList.roll.frameDuration
+          )
+        );
       } else {
         // Defender gets hit
-        await hitPhase(action.defender, defenderParams);
+        defenderParams.setAction("idle");
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      // Defender runs before attacking (if it's their turn)
-      if (action.attacker === defender) {
-        await runPhase(action.attacker, defenderParams);
-        await attackPhase(action.attacker, defenderParams);
+      // Defender runs and attacks if it's their turn
+      if (action.attacker.username === defender.username) {
+        defenderParams.setAction("run");
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            defenderParams.framesList.run.frameCount *
+              defenderParams.framesList.run.frameDuration
+          )
+        );
+
+        defenderParams.setAction("attack");
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            defenderParams.framesList.attack.frameCount *
+              defenderParams.framesList.attack.frameDuration
+          )
+        );
       }
+
+      setAnimationConfig({
+        attacker: "idle",
+        defender: "idle",
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   };
 
-  const preloadedAttackerFrames = useMemo(() => {
-    if (!attackerFramesList) return null;
-    return attackerFramesList[attackerAction] || attackerFramesList.idle || [];
-  }, [attackerFramesList, attackerAction]);
+  const showPreview = async () => {
+    const battleResult = battleOutcome(attacker, defender);
 
-  const preloadedDefenderFrames = useMemo(() => {
-    if (!defenderFramesList) return null;
-    return defenderFramesList[defenderAction] || defenderFramesList.idle || [];
-  }, [defenderFramesList, defenderAction]);
+    // Process battleResult actions
+    processActions(battleResult.actions);
+  };
+
+  const systems = [
+    (entities: any, { time }: any) => {
+      entities.attacker.currentFrame =
+        Math.floor(
+          time.current /
+            SPRITE_CONFIGS.attacker[animationConfig.attacker].frameDuration
+        ) % SPRITE_CONFIGS.attacker[animationConfig.attacker].frameCount;
+
+      entities.defender.currentFrame =
+        Math.floor(
+          time.current /
+            SPRITE_CONFIGS.defender[animationConfig.defender].frameDuration
+        ) % SPRITE_CONFIGS.defender[animationConfig.defender].frameCount;
+
+      return entities;
+    },
+  ];
 
   return (
-    <ThemedView style={styles.wrapper}>
-      <Text>Battle Preview</Text>
-      <View style={styles.spriteContainer}>
-        <View style={styles.attackerWrapper}>
-          <Animated.View
-            style={[
-              styles.attackerContainer,
-              { transform: [{ translateX: attackerPosition }] },
-            ]}
-          >
-            <Animated.Image
-              source={{
-                uri:
-                  preloadedAttackerFrames?.[attackerCurrentFrame] ||
-                  preloadedAttackerFrames?.[0] ||
-                  "",
-              }}
-              style={styles.attacker}
-            />
-          </Animated.View>
-        </View>
-        <View style={styles.defenderWrapper}>
-          <Animated.View
-            style={[
-              styles.defenderContainer,
-              { transform: [{ translateX: defenderPosition }] },
-            ]}
-          >
-            <Animated.Image
-              source={{
-                uri:
-                  preloadedDefenderFrames?.[defenderCurrentFrame] ||
-                  preloadedDefenderFrames?.[0] ||
-                  "",
-              }}
-              style={styles.defender}
-            />
-          </Animated.View>
-        </View>
-      </View>
-      {
-        isPreloaded && (
-          <Button
-            title="Start Battle"
-            onPress={() => showBattlePreview(sampleBattleResult.actions)}
-          />
-        ) // Show button only when assets are preloaded
-      }
-    </ThemedView>
+    <View style={styles.container}>
+      <GameEngine
+        style={styles.engine}
+        systems={systems}
+        entities={{
+          attacker: {
+            currentFrame: attackerFrame,
+            renderer: (
+              <AttackerSprite
+                currentFrame={attackerFrame}
+                // x position is random from 50 to 100
+                position={[50, 100]}
+              />
+            ),
+          },
+          defender: {
+            currentFrame: defenderFrame,
+            renderer: (
+              <DefenderSprite
+                currentFrame={defenderFrame}
+                position={[200, 100]}
+              />
+            ),
+          },
+        }}
+      />
+      <Button
+        title="Starts"
+        onPress={() => {
+          showPreview();
+        }}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
-    backgroundColor: "white",
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  engine: {
+    position: "relative",
   },
   spriteContainer: {
-    marginTop: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    width: "80%",
-    height: "25%",
-    position: "relative",
-  },
-  attackerWrapper: {
-    width: "40%",
-    height: "100%",
     position: "absolute",
-    left: 0,
-  },
-  attackerContainer: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-  },
-  attacker: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "contain",
-  },
-  defenderWrapper: {
-    width: "40%",
-    height: "100%",
-    position: "absolute",
-    right: 0,
-  },
-  defenderContainer: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-  },
-  defender: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "contain",
-    transform: [{ scaleX: -1 }],
+    overflow: "hidden",
   },
 });
 
-export default AttackTab;
+export default AnimatedSprite;
