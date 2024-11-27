@@ -4,10 +4,10 @@ import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
-  Image,
   Button,
   Text,
   ImageBackground,
+  Animated,
 } from "react-native";
 import { GameEngine } from "react-native-game-engine";
 
@@ -182,6 +182,9 @@ const AnimatedSprite = () => {
     defender: "idle",
   });
 
+  let attackerHealthLocal = attacker.stats.health;
+  let defenderHealthLocal = defender.stats.health;
+
   const [attackerFrame, setAttackerFrame] = useState(0);
   const [defenderFrame, setDefenderFrame] = useState(0);
 
@@ -207,6 +210,7 @@ const AnimatedSprite = () => {
 
     return (
       <View
+        className="sprite-container"
         style={[
           styles.spriteContainer,
           {
@@ -217,15 +221,18 @@ const AnimatedSprite = () => {
           },
         ]}
       >
-        <Image
+        <Animated.Image
           source={config.image}
-          style={{
-            position: "absolute",
-            width: config.columns * config.width,
-            height: config.rows * config.height,
-            left: -x,
-            top: -y,
-          }}
+          style={[
+            styles.sprite,
+            {
+              position: "absolute",
+              width: config.columns * config.width,
+              height: config.rows * config.height,
+              left: -x,
+              top: -y,
+            },
+          ]}
         />
       </View>
     );
@@ -244,6 +251,7 @@ const AnimatedSprite = () => {
 
     return (
       <View
+        className="sprite-container"
         style={[
           styles.spriteContainer,
           {
@@ -258,15 +266,18 @@ const AnimatedSprite = () => {
           },
         ]}
       >
-        <Image
+        <Animated.Image
           source={config.image}
-          style={{
-            position: "absolute",
-            width: config.columns * config.width,
-            height: config.rows * config.height,
-            left: -x,
-            top: -y,
-          }}
+          style={[
+            styles.sprite,
+            {
+              position: "absolute",
+              width: config.columns * config.width,
+              height: config.rows * config.height,
+              left: -x,
+              top: -y,
+            },
+          ]}
         />
       </View>
     );
@@ -346,6 +357,7 @@ const AnimatedSprite = () => {
           })),
         setPosition: isAttacker ? setAttackerPosition : setDefenderPosition,
         attackPosition: isAttacker ? 190 : 60,
+        dodgePosition: isAttacker ? 10 : 250,
         resetPosition: isAttacker
           ? initialPositions.attacker
           : initialPositions.defender,
@@ -355,15 +367,18 @@ const AnimatedSprite = () => {
         updateHealth: (newHealth: number) => {
           if (isAttacker) {
             currentAttackerHealth = newHealth;
-            setAttackerHealth(newHealth);
+            // setAttackerHealth(newHealth);
           } else {
             currentDefenderHealth = newHealth;
-            setDefenderHealth(newHealth);
+            // setDefenderHealth(newHealth);
           }
         },
         maxHealth: isAttacker ? attacker.stats.health : defender.stats.health,
       };
     };
+
+    // Pause briefly before starting the battle
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     for (const action of actions) {
       const attacking =
@@ -382,6 +397,13 @@ const AnimatedSprite = () => {
 
       // Perform attack animation
       attackingParams.setAction("attack");
+      if (action.isDodged) {
+        console.log(`${action.defender} dodged the attack!`);
+        defendingParams.setPosition(defendingParams.dodgePosition);
+        defendingParams.setAction("roll");
+      } else {
+        defendingParams.setAction("hit");
+      }
       await new Promise((resolve) =>
         setTimeout(
           resolve,
@@ -392,15 +414,7 @@ const AnimatedSprite = () => {
 
       // Handle defending sprite response
       if (action.isDodged) {
-        console.log(`${action.defender} dodged the attack!`);
-        defendingParams.setAction("roll");
-        await new Promise((resolve) =>
-          setTimeout(
-            resolve,
-            defendingParams.framesList.roll.frameCount *
-              defendingParams.framesList.roll.frameDuration
-          )
-        );
+        defendingParams.setPosition(defendingParams.resetPosition);
       } else {
         // Apply hit animation and health deduction
         defendingParams.setAction("hit");
@@ -408,6 +422,17 @@ const AnimatedSprite = () => {
         // Use local health copy for updates
         const currentHealth = defendingParams.getHealth();
         const newHealth = Math.max(currentHealth - action.damageDealt, 0);
+
+        console.log("*********************************");
+        // Set attackerHealthLocal and defenderHealthLocal
+        if (attacking === "attacker") {
+          attackerHealthLocal = newHealth;
+          console.log("attackerHealthLocal", attackerHealthLocal);
+        } else {
+          defenderHealthLocal = newHealth;
+          console.log("defenderHealthLocal", defenderHealthLocal);
+        }
+        console.log("*********************************");
 
         console.log(
           `${action.defender} takes damage: ${action.damageDealt}, health: ${currentHealth} → ${newHealth}`
@@ -451,7 +476,7 @@ const AnimatedSprite = () => {
       }
 
       // Pause briefly before the next action
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     // After battle: Ensure winner is idle and at their original position
@@ -468,6 +493,8 @@ const AnimatedSprite = () => {
 
   const showPreview = async () => {
     const battleResult = battleOutcome(attacker, defender);
+    console.log("attacker", attacker);
+    console.log("defender", defender);
     setBattleLogs(battleResult.actions.map((a) => JSON.stringify(a)));
     console.log("battleResult", battleResult);
     await processActions(battleResult.actions);
@@ -482,15 +509,32 @@ const AnimatedSprite = () => {
         >
           <GameEngine style={styles.engine} systems={systems} entities={{}} />
           <View style={styles.healthBarWrapper}>
-            <HealthBar
-              health={attackerHealth}
-              maxHealth={attacker.stats.health}
-            />
-            <HealthBar
-              isDefender={true}
-              health={defenderHealth}
-              maxHealth={defender.stats.health}
-            />
+            <View style={styles.healthBar}>
+              <Text style={styles.healthNumber}>{attackerHealthLocal}</Text>
+              <View
+                style={[
+                  styles.health,
+                  {
+                    width: `${
+                      (attackerHealthLocal / attacker.stats.health) * 100
+                    }%`,
+                  },
+                ]}
+              ></View>
+            </View>
+            <View style={styles.healthBar}>
+              <Text style={styles.healthNumber}>{defenderHealthLocal}</Text>
+              <View
+                style={[
+                  styles.health,
+                  {
+                    width: `${
+                      (defenderHealthLocal / defender.stats.health) * 100
+                    }%`,
+                  },
+                ]}
+              ></View>
+            </View>
           </View>
           <AttackerSprite />
           <DefenderSprite />
@@ -537,7 +581,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     transform: [{ scale: 1.5 }],
   },
-
+  sprite: {
+    transitionProperty: "all",
+    transitionDuration: "700ms",
+  },
   healthBarWrapper: {
     display: "flex",
     flexDirection: "row",
@@ -548,18 +595,35 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   healthBar: {
-    height: 10,
+    height: 15,
     width: "40%",
     backgroundColor: "red",
     borderRadius: 3,
     borderColor: "white",
     borderWidth: 1,
+    position: "relative",
+
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
   },
   health: {
     backgroundColor: "green",
     height: "100%",
     transitionProperty: "width",
     transitionDuration: "200ms",
+    textAlign: "center",
+  },
+  healthNumber: {
+    color: "white",
+    fontSize: 10,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    zIndex: 5,
+    width: "auto",
+    marginLeft: "auto",
+    marginRight: "auto",
   },
 });
 
