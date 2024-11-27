@@ -1,7 +1,7 @@
 import { battleOutcome } from "@/functions/battle";
 import { Avatar } from "@/types/avatar";
 import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Image, Button } from "react-native";
+import { StyleSheet, View, Image, Button, Text } from "react-native";
 import { GameEngine } from "react-native-game-engine";
 
 const attacker: Avatar = {
@@ -131,99 +131,7 @@ const SPRITE_CONFIGS: Record<
   },
 };
 
-const AttackerSprite = ({
-  currentFrame,
-  position,
-}: {
-  currentFrame: number;
-  position: number[];
-}) => {
-  const config = SPRITE_CONFIGS.attacker["idle"];
-  const getFramePosition = (frame: number) => {
-    const row = Math.floor(frame / config.columns);
-    const col = frame % config.columns;
-    return { x: col * config.width, y: row * config.height };
-  };
-
-  const { x, y } = getFramePosition(currentFrame);
-  let test = 10;
-  // set x position to random from 50 to 100 every 50ms
-  setInterval(() => {
-    test = Math.floor(Math.random() * (50 - 10 + 1)) + 10;
-  }, 50);
-  return (
-    <View
-      style={[
-        styles.spriteContainer,
-        {
-          width: config.width,
-          height: config.height,
-          left: position ? position[0] : 50,
-          top: position ? position[1] : 100,
-        },
-      ]}
-    >
-      <Image
-        source={config.image}
-        style={{
-          position: "absolute",
-          width: config.columns * config.width,
-          height: config.rows * config.height,
-          left: -x,
-          top: -y,
-        }}
-      />
-    </View>
-  );
-};
-
-const DefenderSprite = ({
-  currentFrame,
-  position,
-}: {
-  currentFrame: number;
-  position: number[];
-}) => {
-  const config = SPRITE_CONFIGS.defender["idle"];
-  const getFramePosition = (frame: number) => {
-    const row = Math.floor(frame / config.columns);
-    const col = frame % config.columns;
-    return { x: col * config.width, y: row * config.height };
-  };
-
-  const { x, y } = getFramePosition(currentFrame);
-
-  return (
-    <View
-      style={[
-        styles.spriteContainer,
-        {
-          width: config.width,
-          height: config.height,
-          left: position ? position[0] : 200,
-          top: position ? position[1] : 100,
-          transform: "scaleX(-1)",
-        },
-      ]}
-    >
-      <Image
-        source={config.image}
-        style={{
-          position: "absolute",
-          width: config.columns * config.width,
-          height: config.rows * config.height,
-          left: -x,
-          top: -y,
-        }}
-      />
-    </View>
-  );
-};
-
 const AnimatedSprite = () => {
-  const [attackerFrame, setAttackerFrame] = useState(0);
-  const [defenderFrame, setDefenderFrame] = useState(0);
-  const [currentAction, setCurrentAction] = useState<number>(0);
   const [animationConfig, setAnimationConfig] = useState<
     Record<"attacker" | "defender", SpriteActions>
   >({
@@ -231,41 +139,136 @@ const AnimatedSprite = () => {
     defender: "idle",
   });
 
+  const [attackerFrame, setAttackerFrame] = useState(0);
+  const [defenderFrame, setDefenderFrame] = useState(0);
+  const [battleLogs, setBattleLogs] = useState<string[]>([]);
+
+  const AttackerSprite = ({ position }: { position: number[] }) => {
+    const config = SPRITE_CONFIGS.attacker[animationConfig.attacker];
+
+    // Get the position of the current frame in the sprite sheet
+    const getFramePosition = (frame: number) => {
+      const row = Math.floor(frame / config.columns);
+      const col = frame % config.columns;
+      return { x: col * config.width, y: row * config.height };
+    };
+
+    const { x, y } = getFramePosition(attackerFrame);
+
+    return (
+      <View
+        style={[
+          styles.spriteContainer,
+          {
+            width: config.width,
+            height: config.height,
+            left: position[0],
+            top: position[1],
+          },
+        ]}
+      >
+        <Image
+          source={config.image}
+          style={{
+            position: "absolute",
+            width: config.columns * config.width,
+            height: config.rows * config.height,
+            left: -x,
+            top: -y,
+          }}
+        />
+      </View>
+    );
+  };
+
+  const DefenderSprite = ({ position }: { position: number[] }) => {
+    const config = SPRITE_CONFIGS.defender[animationConfig.defender];
+    const getFramePosition = (frame: number) => {
+      const row = Math.floor(frame / config.columns);
+      const col = frame % config.columns;
+      return { x: col * config.width, y: row * config.height };
+    };
+
+    const { x, y } = getFramePosition(defenderFrame);
+
+    return (
+      <View
+        style={[
+          styles.spriteContainer,
+          {
+            width: config.width,
+            height: config.height,
+            left: position[0],
+            top: position[1],
+            transform: [{ scaleX: -1 }],
+          },
+        ]}
+      >
+        <Image
+          source={config.image}
+          style={{
+            position: "absolute",
+            width: config.columns * config.width,
+            height: config.rows * config.height,
+            left: -x,
+            top: -y,
+          }}
+        />
+      </View>
+    );
+  };
+
+  const systems = [
+    (_, { time }: any) => {
+      // Calculate the current frame for the attacker
+      const attackerConfig = SPRITE_CONFIGS.attacker[animationConfig.attacker];
+      const newAttackerFrame =
+        Math.floor(time.current / attackerConfig.frameDuration) %
+        attackerConfig.frameCount;
+
+      // Update the attacker frame directly
+      setAttackerFrame((prevFrame) =>
+        prevFrame !== newAttackerFrame ? newAttackerFrame : prevFrame
+      );
+
+      // Calculate the current frame for the defender
+      const defenderConfig = SPRITE_CONFIGS.defender[animationConfig.defender];
+      const newDefenderFrame =
+        Math.floor(time.current / defenderConfig.frameDuration) %
+        defenderConfig.frameCount;
+
+      // Update the defender frame directly
+      setDefenderFrame((prevFrame) =>
+        prevFrame !== newDefenderFrame ? newDefenderFrame : prevFrame
+      );
+    },
+  ];
+
   const processActions = async (actions: any[]) => {
-    const getPhaseParams = (actor: Avatar) => {
-      const isAttacker = actor === attacker;
+    const getPhaseParams = (actor: string) => {
+      const isAttacker = actor === attacker.username;
       return {
         framesList: isAttacker
           ? SPRITE_CONFIGS.attacker
           : SPRITE_CONFIGS.defender,
         setAction: (action: SpriteActions) =>
-          setAnimationConfig((prev) => ({
-            ...prev,
-            [isAttacker ? "attacker" : "defender"]: action,
-          })),
+          setAnimationConfig((prev) => {
+            console.log(`${actor} is now performing: ${action}`);
+            return {
+              ...prev,
+              [isAttacker ? "attacker" : "defender"]: action,
+            };
+          }),
       };
     };
 
-    setAnimationConfig({
-      attacker: "idle",
-      defender: "idle",
-    });
+    setAnimationConfig({ attacker: "idle", defender: "idle" });
 
     for (const action of actions) {
       const attackerParams = getPhaseParams(action.attacker);
       const defenderParams = getPhaseParams(action.defender);
 
-      // Attacker runs
-      attackerParams.setAction("run");
-      await new Promise((resolve) =>
-        setTimeout(
-          resolve,
-          attackerParams.framesList.run.frameCount *
-            attackerParams.framesList.run.frameDuration
-        )
-      );
-
-      // Attacker attacks
+      // Attacker performs an action
       attackerParams.setAction("attack");
       await new Promise((resolve) =>
         setTimeout(
@@ -291,31 +294,8 @@ const AnimatedSprite = () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      // Defender runs and attacks if it's their turn
-      if (action.attacker.username === defender.username) {
-        defenderParams.setAction("run");
-        await new Promise((resolve) =>
-          setTimeout(
-            resolve,
-            defenderParams.framesList.run.frameCount *
-              defenderParams.framesList.run.frameDuration
-          )
-        );
-
-        defenderParams.setAction("attack");
-        await new Promise((resolve) =>
-          setTimeout(
-            resolve,
-            defenderParams.framesList.attack.frameCount *
-              defenderParams.framesList.attack.frameDuration
-          )
-        );
-      }
-
-      setAnimationConfig({
-        attacker: "idle",
-        defender: "idle",
-      });
+      // Reset both to idle
+      setAnimationConfig({ attacker: "idle", defender: "idle" });
 
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
@@ -323,56 +303,19 @@ const AnimatedSprite = () => {
 
   const showPreview = async () => {
     const battleResult = battleOutcome(attacker, defender);
-
+    setBattleLogs(battleResult.actions.map((a) => JSON.stringify(a)));
     // Process battleResult actions
     processActions(battleResult.actions);
   };
 
-  const systems = [
-    (entities: any, { time }: any) => {
-      entities.attacker.currentFrame =
-        Math.floor(
-          time.current /
-            SPRITE_CONFIGS.attacker[animationConfig.attacker].frameDuration
-        ) % SPRITE_CONFIGS.attacker[animationConfig.attacker].frameCount;
-
-      entities.defender.currentFrame =
-        Math.floor(
-          time.current /
-            SPRITE_CONFIGS.defender[animationConfig.defender].frameDuration
-        ) % SPRITE_CONFIGS.defender[animationConfig.defender].frameCount;
-
-      return entities;
-    },
-  ];
-
   return (
     <View style={styles.container}>
-      <GameEngine
-        style={styles.engine}
-        systems={systems}
-        entities={{
-          attacker: {
-            currentFrame: attackerFrame,
-            renderer: (
-              <AttackerSprite
-                currentFrame={attackerFrame}
-                // x position is random from 50 to 100
-                position={[50, 100]}
-              />
-            ),
-          },
-          defender: {
-            currentFrame: defenderFrame,
-            renderer: (
-              <DefenderSprite
-                currentFrame={defenderFrame}
-                position={[200, 100]}
-              />
-            ),
-          },
-        }}
-      />
+      <GameEngine style={styles.engine} systems={systems} entities={{}} />
+      <AttackerSprite position={[50, 100]} />
+      <DefenderSprite position={[200, 100]} />
+      <View style={styles.infoWrapper}>
+        <Text style={styles.info}>{battleLogs}</Text>
+      </View>
       <Button
         title="Starts"
         onPress={() => {
@@ -390,6 +333,15 @@ const styles = StyleSheet.create({
   },
   engine: {
     position: "relative",
+  },
+  infoWrapper: {
+    backgroundColor: "#fff",
+    color: "#000",
+    height: 200,
+    padding: 20,
+  },
+  info: {
+    color: "#000",
   },
   spriteContainer: {
     position: "absolute",
