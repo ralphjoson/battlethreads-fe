@@ -36,7 +36,7 @@ const defender: Avatar = {
   },
 };
 
-type SpriteActions = "attack" | "run" | "idle" | "roll";
+type SpriteActions = "attack" | "run" | "idle" | "roll" | "death" | "hit";
 
 const SPRITE_CONFIGS: Record<
   string,
@@ -90,6 +90,24 @@ const SPRITE_CONFIGS: Record<
       frameCount: 12,
       frameDuration: 100,
     },
+    hit: {
+      image: require("@assets/sprites/knight-a/_Hit.png"),
+      columns: 1,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 1,
+      frameDuration: 120,
+    },
+    death: {
+      image: require("@assets/sprites/knight-a/_Death.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 150,
+    },
   },
   defender: {
     attack: {
@@ -128,6 +146,24 @@ const SPRITE_CONFIGS: Record<
       frameCount: 12,
       frameDuration: 100,
     },
+    hit: {
+      image: require("@assets/sprites/knight-b/_Hit.png"),
+      columns: 1,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 1,
+      frameDuration: 120,
+    },
+    death: {
+      image: require("@assets/sprites/knight-b/_Death.png"),
+      columns: 10,
+      rows: 1,
+      width: 120,
+      height: 80,
+      frameCount: 10,
+      frameDuration: 150,
+    },
   },
 };
 
@@ -141,12 +177,16 @@ const AnimatedSprite = () => {
 
   const [attackerFrame, setAttackerFrame] = useState(0);
   const [defenderFrame, setDefenderFrame] = useState(0);
+
+  // Positions for the attacker and defender
+  const [attackerPosition, setAttackerPosition] = useState(50); // Initial x-coordinate for attacker
+  const [defenderPosition, setDefenderPosition] = useState(200); // Initial x-coordinate for defender
+
   const [battleLogs, setBattleLogs] = useState<string[]>([]);
 
-  const AttackerSprite = ({ position }: { position: number[] }) => {
+  const AttackerSprite = () => {
     const config = SPRITE_CONFIGS.attacker[animationConfig.attacker];
 
-    // Get the position of the current frame in the sprite sheet
     const getFramePosition = (frame: number) => {
       const row = Math.floor(frame / config.columns);
       const col = frame % config.columns;
@@ -162,8 +202,8 @@ const AnimatedSprite = () => {
           {
             width: config.width,
             height: config.height,
-            left: position[0],
-            top: position[1],
+            left: attackerPosition,
+            top: 100, // Fixed y-coordinate
           },
         ]}
       >
@@ -181,8 +221,9 @@ const AnimatedSprite = () => {
     );
   };
 
-  const DefenderSprite = ({ position }: { position: number[] }) => {
+  const DefenderSprite = () => {
     const config = SPRITE_CONFIGS.defender[animationConfig.defender];
+
     const getFramePosition = (frame: number) => {
       const row = Math.floor(frame / config.columns);
       const col = frame % config.columns;
@@ -198,9 +239,9 @@ const AnimatedSprite = () => {
           {
             width: config.width,
             height: config.height,
-            left: position[0],
-            top: position[1],
-            transform: [{ scaleX: -1 }],
+            left: defenderPosition,
+            top: 100, // Fixed y-coordinate
+            transform: [{ scaleX: -1 }], // Flip the defender sprite
           },
         ]}
       >
@@ -220,31 +261,28 @@ const AnimatedSprite = () => {
 
   const systems = [
     (_, { time }: any) => {
-      // Calculate the current frame for the attacker
+      // Update attacker frame
       const attackerConfig = SPRITE_CONFIGS.attacker[animationConfig.attacker];
       const newAttackerFrame =
         Math.floor(time.current / attackerConfig.frameDuration) %
         attackerConfig.frameCount;
+      setAttackerFrame(newAttackerFrame);
 
-      // Update the attacker frame directly
-      setAttackerFrame((prevFrame) =>
-        prevFrame !== newAttackerFrame ? newAttackerFrame : prevFrame
-      );
-
-      // Calculate the current frame for the defender
+      // Update defender frame
       const defenderConfig = SPRITE_CONFIGS.defender[animationConfig.defender];
       const newDefenderFrame =
         Math.floor(time.current / defenderConfig.frameDuration) %
         defenderConfig.frameCount;
-
-      // Update the defender frame directly
-      setDefenderFrame((prevFrame) =>
-        prevFrame !== newDefenderFrame ? newDefenderFrame : prevFrame
-      );
+      setDefenderFrame(newDefenderFrame);
     },
   ];
 
   const processActions = async (actions: any[]) => {
+    const initialPositions = {
+      attacker: 50, // Initial x-position for the attacker
+      defender: 200, // Initial x-position for the defender
+    };
+
     const getPhaseParams = (actor: string) => {
       const isAttacker = actor === attacker.username;
       return {
@@ -259,6 +297,11 @@ const AnimatedSprite = () => {
               [isAttacker ? "attacker" : "defender"]: action,
             };
           }),
+        setPosition: isAttacker ? setAttackerPosition : setDefenderPosition,
+        attackPosition: isAttacker ? 190 : 60, // Position when attacking
+        resetPosition: isAttacker
+          ? initialPositions.attacker
+          : initialPositions.defender, // Reset to initial position
       };
     };
 
@@ -268,7 +311,11 @@ const AnimatedSprite = () => {
       const attackerParams = getPhaseParams(action.attacker);
       const defenderParams = getPhaseParams(action.defender);
 
-      // Attacker performs an action
+      // Move the attacker to the attack position
+      attackerParams.setAction("run");
+      attackerParams.setPosition(attackerParams.attackPosition);
+
+      // Attacker attacks
       attackerParams.setAction("attack");
       await new Promise((resolve) =>
         setTimeout(
@@ -294,7 +341,9 @@ const AnimatedSprite = () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      // Reset both to idle
+      // Reset attacker position and both sprites to idle
+      attackerParams.setAction("run");
+      attackerParams.setPosition(attackerParams.resetPosition);
       setAnimationConfig({ attacker: "idle", defender: "idle" });
 
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -304,24 +353,18 @@ const AnimatedSprite = () => {
   const showPreview = async () => {
     const battleResult = battleOutcome(attacker, defender);
     setBattleLogs(battleResult.actions.map((a) => JSON.stringify(a)));
-    // Process battleResult actions
-    processActions(battleResult.actions);
+    await processActions(battleResult.actions);
   };
 
   return (
     <View style={styles.container}>
       <GameEngine style={styles.engine} systems={systems} entities={{}} />
-      <AttackerSprite position={[50, 100]} />
-      <DefenderSprite position={[200, 100]} />
+      <AttackerSprite />
+      <DefenderSprite />
       <View style={styles.infoWrapper}>
-        <Text style={styles.info}>{battleLogs}</Text>
+        <Text style={styles.info}>{battleLogs.join("\n")}</Text>
       </View>
-      <Button
-        title="Starts"
-        onPress={() => {
-          showPreview();
-        }}
-      />
+      <Button title="Start" onPress={showPreview} />
     </View>
   );
 };
