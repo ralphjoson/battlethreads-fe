@@ -1,0 +1,58 @@
+const knightB = {
+  attack: {
+    image: require("@assets/sprites/knight-b/_AttackCombo.png"),
+    columns: 10,
+    rows: 1,
+    width: 120,
+    height: 80,
+    frameCount: 10,
+    frameDuration: 100,
+  },
+  run: {
+    image: require("@assets/sprites/knight-b/_Run.png"),
+    columns: 10,
+    rows: 1,
+    width: 120,
+    height: 80,
+    frameCount: 10,
+    frameDuration: 100,
+  },
+  idle: {
+    image: require("@assets/sprites/knight-b/_Idle.png"),
+    columns: 10,
+    rows: 1,
+    width: 120,
+    height: 80,
+    frameCount: 10,
+    frameDuration: 100,
+  },
+  roll: {
+    image: require("@assets/sprites/knight-b/_Roll.png"),
+    columns: 12,
+    rows: 1,
+    width: 120,
+    height: 80,
+    frameCount: 12,
+    frameDuration: 100,
+  },
+  hit: {
+    image: require("@assets/sprites/knight-b/_Hit.png"),
+    columns: 1,
+    rows: 1,
+    width: 120,
+    height: 80,
+    frameCount: 1,
+    frameDuration: 120,
+  },
+  death: {
+    image: require("@assets/sprites/knight-b/_Death.png"),
+    columns: 10,
+    rows: 1,
+    width: 120,
+    height: 80,
+    frameCount: 10,
+    frameDuration: 150,
+  },
+};
+
+export default knightB;

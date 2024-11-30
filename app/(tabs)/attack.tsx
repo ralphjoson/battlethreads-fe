@@ -1,18 +1,43 @@
-import { battleOutcome } from "@/functions/battle";
-import { Avatar } from "@/types/avatar";
-import React, { useEffect, useState } from "react";
-import {
-  StyleSheet,
-  View,
-  Button,
-  Text,
-  ImageBackground,
-  Animated,
-} from "react-native";
+import React, { useState } from "react";
+import { StyleSheet, View, Button, ImageBackground } from "react-native";
 import { GameEngine } from "react-native-game-engine";
+import * as sprites from "../../lib/sprites/_sprites";
+import Sprite from "@/components/Sprite";
+import { Avatar, AvatarAction } from "@/types/avatar";
+import FightScene from "@/constants/FightScene";
+import { battleOutcome } from "@/functions/battle";
+
+const SPRITE_CONFIGS = {
+  playerA: sprites.akstar,
+  playerB: sprites.sakura,
+};
+
+type PlayerEntity = {
+  position: [number, number];
+  action: AvatarAction;
+  renderer: ({
+    position,
+    action,
+  }: {
+    position: [number, number];
+    action: AvatarAction;
+  }) => JSX.Element;
+};
+
+type HealthBarEntity = {
+  position: [number, number];
+  remainingHealth: number;
+  renderer: ({
+    position,
+    remainingHealth,
+  }: {
+    position: [number, number];
+    remainingHealth: number;
+  }) => JSX.Element;
+};
 
 const attacker: Avatar = {
-  username: "Attacker",
+  id: "Attacker",
   avatarId: "2",
   stats: {
     attack: 25,
@@ -28,7 +53,7 @@ const attacker: Avatar = {
 };
 
 const defender: Avatar = {
-  username: "Defender",
+  id: "Defender",
   avatarId: "2",
   stats: {
     attack: 25,
@@ -43,587 +68,632 @@ const defender: Avatar = {
   },
 };
 
-type SpriteActions = "attack" | "run" | "idle" | "roll" | "death" | "hit";
+// System to handle dispatched events and update entities
+const ActionSystem = (
+  entities: { [key: string]: PlayerEntity | HealthBarEntity },
+  { events }: { events: any }
+) => {
+  events.forEach(
+    (event: {
+      type: string;
+      entity: string;
+      action?: AvatarAction;
+      moveTo?: [number, number];
+      damage?: number;
+    }) => {
+      if (event.type === "change-action" && event.entity && event.action) {
+        const entity = entities[event.entity] as PlayerEntity;
+        if (entity) {
+          entity.action = event.action; // Update the entity's action
+        }
+      }
 
-const SPRITE_CONFIGS: Record<
-  string,
-  Record<
-    SpriteActions,
-    {
-      image: any;
-      columns: number;
-      rows: number;
-      width: number;
-      height: number;
-      frameCount: number;
-      frameDuration: number;
+      if (event.type === "move-entity" && event.entity && event.moveTo) {
+        const entity = entities[event.entity] as PlayerEntity;
+        if (entity) {
+          entity.position = event.moveTo; // Update the entity's position
+        }
+      }
+
+      if (
+        event.type === "update-health" &&
+        event.entity &&
+        event.damage !== undefined
+      ) {
+        const healthBar = entities[`${event.entity}Health`] as HealthBarEntity;
+        if (healthBar) {
+          healthBar.remainingHealth = Math.max(
+            0,
+            healthBar.remainingHealth - event.damage
+          ); // Deduct health but ensure it doesn't go below 0
+        }
+      }
+
+      if (event.type === "reset-health") {
+        const healthBar = entities[`${event.entity}Health`] as HealthBarEntity;
+        if (healthBar) {
+          healthBar.remainingHealth = 100; // Reset health to 100
+        }
+      }
     }
-  >
-> = {
-  attacker: {
-    attack: {
-      image: require("@assets/sprites/knight-a/_AttackCombo2hit.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 100,
-    },
-    run: {
-      image: require("@assets/sprites/knight-a/_Run.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 100,
-    },
-    idle: {
-      image: require("@assets/sprites/knight-a/_Idle.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 100,
-    },
-    roll: {
-      image: require("@assets/sprites/knight-a/_Roll.png"),
-      columns: 12,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 12,
-      frameDuration: 100,
-    },
-    hit: {
-      image: require("@assets/sprites/knight-a/_Hit.png"),
-      columns: 1,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 1,
-      frameDuration: 120,
-    },
-    death: {
-      image: require("@assets/sprites/knight-a/_Death.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 150,
-    },
-  },
-  defender: {
-    attack: {
-      image: require("@assets/sprites/knight-b/_AttackCombo.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 100,
-    },
-    run: {
-      image: require("@assets/sprites/knight-b/_Run.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 100,
-    },
-    idle: {
-      image: require("@assets/sprites/knight-b/_Idle.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 100,
-    },
-    roll: {
-      image: require("@assets/sprites/knight-b/_Roll.png"),
-      columns: 12,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 12,
-      frameDuration: 100,
-    },
-    hit: {
-      image: require("@assets/sprites/knight-b/_Hit.png"),
-      columns: 1,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 1,
-      frameDuration: 120,
-    },
-    death: {
-      image: require("@assets/sprites/knight-b/_Death.png"),
-      columns: 10,
-      rows: 1,
-      width: 120,
-      height: 80,
-      frameCount: 10,
-      frameDuration: 150,
-    },
-  },
+  );
+
+  return entities;
 };
 
 const AnimatedSprite = () => {
-  const [animationConfig, setAnimationConfig] = useState<
-    Record<"attacker" | "defender", SpriteActions>
-  >({
-    attacker: "idle",
-    defender: "idle",
+  const [defaultPositions, setDefaultPositions] = useState<{
+    [key: string]: [number, number];
+  }>({
+    attacker: [FightScene.margin + SPRITE_CONFIGS.playerA.idle.width, 90],
+    defender: [
+      FightScene.width - SPRITE_CONFIGS.playerB.idle.width - FightScene.margin,
+      90,
+    ],
+  });
+  const [currentPositions, setCurrentPositions] = useState<{
+    [key: string]: [number, number];
+  }>({
+    attacker: [defaultPositions.attacker[0], defaultPositions.attacker[1]],
+    defender: [defaultPositions.defender[0], defaultPositions.defender[1]],
+  });
+  let currentAttackerPosition = currentPositions.attacker;
+  const [entities] = useState<{
+    [key: string]: PlayerEntity | HealthBarEntity;
+  }>({
+    playerA: {
+      position: currentAttackerPosition,
+      action: "idle",
+      renderer: ({
+        position,
+        action,
+      }: {
+        position: [number, number];
+        action: AvatarAction;
+      }) => {
+        const spriteConfig =
+          SPRITE_CONFIGS.playerA[action as keyof typeof SPRITE_CONFIGS.playerA];
+        return (
+          <View
+            style={{
+              position: "absolute",
+              left: position[0],
+              top: position[1],
+              transitionProperty: "left, top",
+              transitionDuration: "100ms",
+              transform: [{ scaleX: -1 }],
+            }}
+          >
+            <Sprite
+              src={spriteConfig.image}
+              frameWidth={spriteConfig.width}
+              frameHeight={spriteConfig.height}
+              frameCount={spriteConfig.frameCount}
+              fps={spriteConfig.frameDuration}
+              columns={spriteConfig.columns}
+            />
+          </View>
+        );
+      },
+    },
+    playerAHealth: {
+      position: [10, 10],
+      remainingHealth: attacker.stats.health,
+      renderer: ({
+        position,
+        remainingHealth,
+      }: {
+        position: [number, number];
+        remainingHealth: number;
+      }) => (
+        <View
+          style={{
+            position: "absolute",
+            left: position[0],
+            top: position[1],
+            width: "40%",
+            height: 10,
+            backgroundColor: "#b75454",
+            borderWidth: 1,
+            borderColor: "#FFF",
+            overflow: "hidden",
+            borderRadius: 2,
+          }}
+        >
+          <View
+            style={{
+              width: `${remainingHealth}%`,
+              height: "100%",
+              backgroundColor: "#5ac466",
+            }}
+          />
+        </View>
+      ),
+    },
+    playerB: {
+      position: currentPositions.defender,
+      action: "idle",
+      renderer: ({
+        position,
+        action,
+      }: {
+        position: [number, number];
+        action: AvatarAction;
+      }) => {
+        const spriteConfig = SPRITE_CONFIGS.playerB[action];
+        return (
+          <View
+            style={{
+              position: "absolute",
+              left: position[0],
+              top: position[1],
+              transitionProperty: "left, top",
+              transitionDuration: "100ms",
+            }}
+          >
+            <Sprite
+              src={spriteConfig.image}
+              frameWidth={spriteConfig.width}
+              frameHeight={spriteConfig.height}
+              frameCount={spriteConfig.frameCount}
+              fps={spriteConfig.frameDuration}
+              columns={spriteConfig.columns}
+            />
+          </View>
+        );
+      },
+    },
+    playerBHealth: {
+      position: [FightScene.width - FightScene.width * 0.4 - 10, 10],
+      remainingHealth: defender.stats.health,
+      renderer: ({
+        position,
+        remainingHealth,
+      }: {
+        position: [number, number];
+        remainingHealth: number;
+      }) => (
+        <View
+          style={{
+            position: "absolute",
+            left: position[0],
+            top: position[1],
+            width: "40%",
+            height: 10,
+            backgroundColor: "#b75454",
+            borderWidth: 1,
+            borderColor: "#FFF",
+            overflow: "hidden",
+            borderRadius: 2,
+          }}
+        >
+          <View
+            style={{
+              width: `${remainingHealth}%`,
+              height: "100%",
+              backgroundColor: "#5ac466",
+            }}
+          />
+        </View>
+      ),
+    },
   });
 
-  let attackerHealthLocal = attacker.stats.health;
-  let defenderHealthLocal = defender.stats.health;
+  let gameEngineRef: GameEngine | null = null;
 
-  const [attackerFrame, setAttackerFrame] = useState(0);
-  const [defenderFrame, setDefenderFrame] = useState(0);
-
-  const [attackerHealth, setAttackerHealth] = useState(attacker.stats.health); // Current health for attacker
-  const [defenderHealth, setDefenderHealth] = useState(defender.stats.health); // Current health for defender
-
-  // Positions for the attacker and defender
-  const [attackerPosition, setAttackerPosition] = useState(50); // Initial x-coordinate for attacker
-  const [defenderPosition, setDefenderPosition] = useState(200); // Initial x-coordinate for defender
-
-  const [battleLogs, setBattleLogs] = useState<string[]>([]);
-
-  const AttackerSprite = () => {
-    const config = SPRITE_CONFIGS.attacker[animationConfig.attacker];
-
-    const getFramePosition = (frame: number) => {
-      const row = Math.floor(frame / config.columns);
-      const col = frame % config.columns;
-      return { x: col * config.width, y: row * config.height };
-    };
-
-    const { x, y } = getFramePosition(attackerFrame);
-
-    return (
-      <View
-        className="sprite-container"
-        style={[
-          styles.spriteContainer,
-          {
-            width: config.width,
-            height: config.height,
-            left: attackerPosition,
-            top: 50, // Fixed y-coordinate
-          },
-        ]}
-      >
-        <Animated.Image
-          source={config.image}
-          style={[
-            styles.sprite,
-            {
-              position: "absolute",
-              width: config.columns * config.width,
-              height: config.rows * config.height,
-              left: -x,
-              top: -y,
-            },
-          ]}
-        />
-      </View>
-    );
+  const handleActionChange = (entity: string, action: AvatarAction) => {
+    if (gameEngineRef) {
+      (gameEngineRef as any).dispatch({
+        type: "change-action",
+        entity,
+        action,
+      });
+    }
   };
 
-  const DefenderSprite = () => {
-    const config = SPRITE_CONFIGS.defender[animationConfig.defender];
+  const calculateAttackerPosition = (
+    entity: "playerA" | "playerB",
+    attackerPosition: [number, number],
+    defenderPosition: [number, number]
+  ) => {
+    // Calculate the width and height differences
+    let x =
+      SPRITE_CONFIGS[entity].attack.width - SPRITE_CONFIGS[entity].idle.width;
+    let y =
+      SPRITE_CONFIGS[entity].attack.height - SPRITE_CONFIGS[entity].idle.height;
 
-    const getFramePosition = (frame: number) => {
-      const row = Math.floor(frame / config.columns);
-      const col = frame % config.columns;
-      return { x: col * config.width, y: row * config.height };
-    };
+    // Adjust x if the attack sprite is significantly wider
+    if (
+      SPRITE_CONFIGS[entity].attack.width / SPRITE_CONFIGS[entity].idle.width >
+      1.5
+    ) {
+      x = x / 2;
+    }
 
-    const { x, y } = getFramePosition(defenderFrame);
+    const opponentEntity = entity === "playerA" ? "playerB" : "playerA";
 
-    return (
-      <View
-        className="sprite-container"
-        style={[
-          styles.spriteContainer,
-          {
-            width: config.width,
-            height: config.height,
-            left: defenderPosition,
-            top: 50, // Fixed y-coordinate
-            transform: [
-              { scaleX: -1.5 }, // Flip and scale horizontally
-              { scaleY: 1.5 }, // Scale vertically
-            ],
-          },
-        ]}
-      >
-        <Animated.Image
-          source={config.image}
-          style={[
-            styles.sprite,
-            {
-              position: "absolute",
-              width: config.columns * config.width,
-              height: config.rows * config.height,
-              left: -x,
-              top: -y,
-            },
-          ]}
-        />
-      </View>
-    );
+    if (entity === "playerA") {
+      // Align x and y for playerA
+      x = defenderPosition[0] + x;
+      y =
+        defenderPosition[1] +
+        SPRITE_CONFIGS[entity].idle.height -
+        SPRITE_CONFIGS[entity].attack.height;
+    } else {
+      // Align x and y for playerB
+      x = defenderPosition[0] - x;
+      y =
+        defenderPosition[1] +
+        SPRITE_CONFIGS[entity].idle.height -
+        SPRITE_CONFIGS[entity].attack.height;
+    }
+
+    return [x, y];
   };
 
-  const HealthBar = ({
-    health,
-    maxHealth,
-    isDefender,
-  }: {
-    health: number;
-    maxHealth: number;
-    isDefender?: boolean;
-  }) => {
-    return (
-      <View style={styles.healthBar}>
-        <View
-          style={[
-            styles.health,
-            {
-              width: `${(health / maxHealth) * 100}%`,
-              transform: isDefender ? [{ scaleX: -1 }] : [],
-            },
-          ]}
-        ></View>
-      </View>
-    );
+  const calculateDeadOrDyingPosition = (
+    entity: "playerA" | "playerB",
+    state: "dying" | "dead" | "win" | "winBefore",
+    defaultPosition: [number, number]
+  ): [number, number] => {
+    // Get the sprite configuration for the current state
+    const spriteConfig = SPRITE_CONFIGS[entity][state];
+    const idleConfig = SPRITE_CONFIGS[entity].idle;
+
+    // Calculate the width and height differences between the state and idle sprites
+    let xOffset = spriteConfig.width - idleConfig.width;
+    let yOffset = spriteConfig.height - idleConfig.height;
+
+    // Adjust xOffset if the state sprite is significantly wider
+    if (spriteConfig.width / idleConfig.width > 1.5) {
+      xOffset = xOffset / 2;
+    }
+
+    const opponentEntity = entity === "playerA" ? "playerB" : "playerA";
+    const opponentIdleConfig = SPRITE_CONFIGS[opponentEntity].idle;
+
+    // Calculate the final x and y positions
+    let x, y;
+    if (entity === "playerA") {
+      // For playerA, adjust positions relative to the defender
+      x = defaultPosition[0] + xOffset;
+      y = defaultPosition[1] + idleConfig.height - spriteConfig.height; // Align based on the new state height
+    } else {
+      // For playerB, adjust positions relative to the attacker
+      x = defaultPosition[0] - xOffset;
+      y = defaultPosition[1] + idleConfig.height - spriteConfig.height; // Align based on the new state height
+    }
+
+    return [x, y];
   };
 
-  const systems = [
-    (_, { time }: any) => {
-      // Update attacker frame
-      const attackerConfig = SPRITE_CONFIGS.attacker[animationConfig.attacker];
-      if (
-        animationConfig.attacker !== "death" ||
-        attackerFrame < attackerConfig.frameCount - 1
-      ) {
-        const newAttackerFrame =
-          Math.floor(time.current / attackerConfig.frameDuration) %
-          attackerConfig.frameCount;
-        setAttackerFrame(newAttackerFrame);
-      }
+  const calculateWinPosition = (
+    entity: "playerA" | "playerB",
+    defaultPosition: [number, number]
+  ): [number, number] => {
+    // Get the sprite configuration for the "win" state
+    const winConfig = SPRITE_CONFIGS[entity].win;
+    const idleConfig = SPRITE_CONFIGS[entity].idle;
 
-      // Update defender frame
-      const defenderConfig = SPRITE_CONFIGS.defender[animationConfig.defender];
-      if (
-        animationConfig.defender !== "death" ||
-        defenderFrame < defenderConfig.frameCount - 1
-      ) {
-        const newDefenderFrame =
-          Math.floor(time.current / defenderConfig.frameDuration) %
-          defenderConfig.frameCount;
-        setDefenderFrame(newDefenderFrame);
-      }
-    },
-  ];
+    // Calculate the width and height differences between the "win" and "idle" sprites
+    let xOffset = winConfig.width - idleConfig.width;
+    let yOffset = idleConfig.height - winConfig.height; // Win sprite might be taller/shorter
 
-  const processActions = async (actions: any[]) => {
-    const initialPositions = {
-      attacker: 50, // Initial x-position for the attacker
-      defender: 200, // Initial x-position for the defender
-    };
+    // Adjust xOffset if the win sprite is significantly wider
+    if (winConfig.width / idleConfig.width > 1.5) {
+      xOffset = xOffset / 2;
+    }
 
-    let currentAttackerHealth = attackerHealth; // Local copy for attacker health
-    let currentDefenderHealth = defenderHealth; // Local copy for defender health
+    // Slightly adjust the Y position upwards for a celebratory pose
+    const celebratoryYOffset = 20; // Customize this offset as needed
 
-    const getPhaseParams = (actor: string) => {
-      const isAttacker = actor === attacker.username;
-      return {
-        framesList: isAttacker
-          ? SPRITE_CONFIGS.attacker
-          : SPRITE_CONFIGS.defender,
-        setAction: (action: SpriteActions) =>
-          setAnimationConfig((prev) => ({
-            ...prev,
-            [isAttacker ? "attacker" : "defender"]: action,
-          })),
-        setPosition: isAttacker ? setAttackerPosition : setDefenderPosition,
-        attackPosition: isAttacker ? 190 : 60,
-        dodgePosition: isAttacker ? 10 : 250,
-        resetPosition: isAttacker
-          ? initialPositions.attacker
-          : initialPositions.defender,
-        setHealth: isAttacker ? setAttackerHealth : setDefenderHealth,
-        getHealth: () =>
-          isAttacker ? currentAttackerHealth : currentDefenderHealth, // Use local health copy
-        updateHealth: (newHealth: number) => {
-          if (isAttacker) {
-            currentAttackerHealth = newHealth;
-            // setAttackerHealth(newHealth);
-          } else {
-            currentDefenderHealth = newHealth;
-            // setDefenderHealth(newHealth);
-          }
-        },
-        maxHealth: isAttacker ? attacker.stats.health : defender.stats.health,
-      };
-    };
+    // Calculate final x and y positions
+    let x, y;
+    if (entity === "playerA") {
+      // For playerA, adjust relative to the defender
+      x = defaultPosition[0] + xOffset;
+      y =
+        defaultPosition[1] +
+        (idleConfig.height - winConfig.height) / 2 -
+        celebratoryYOffset; // Center based on sprite height and add celebratory shift
+    } else {
+      // For playerB, adjust relative to the attacker
+      x = defaultPosition[0] - xOffset;
+      y =
+        defaultPosition[1] +
+        (idleConfig.height - winConfig.height) / 2 -
+        celebratoryYOffset; // Center based on sprite height and add celebratory shift
+    }
 
-    // Pause briefly before starting the battle
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    return [x, y];
+  };
 
-    for (const action of actions) {
-      const attacking =
-        action.attacker === attacker.username ? "attacker" : "defender";
-      const defending = attacking === "attacker" ? "defender" : "attacker";
+  const showBattlePreview = async () => {
+    if (gameEngineRef) {
+      console.log("showBattlePreview");
 
-      const attackingParams = getPhaseParams(action.attacker);
-      const defendingParams = getPhaseParams(action.defender);
+      (gameEngineRef as any).dispatch({
+        type: "reset-health",
+        entity: "playerA",
+      });
 
-      console.log(`${action.attacker} is attacking ${action.defender}`);
+      (gameEngineRef as any).dispatch({
+        type: "reset-health",
+        entity: "playerB",
+      });
 
-      // Move attacking sprite to attack position
-      attackingParams.setAction("run");
-      attackingParams.setPosition(attackingParams.attackPosition);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      const attackerMaxHealth = attacker.stats.health;
+      const defenderMaxHealth = defender.stats.health;
+      console.log("attacker", attacker);
+      console.log("defender", defender);
+      const battleResult = battleOutcome(attacker, defender);
+      console.log("battleResult", battleResult);
 
-      // Perform attack animation
-      attackingParams.setAction("attack");
-      if (action.isDodged) {
-        console.log(`${action.defender} dodged the attack!`);
-        defendingParams.setPosition(defendingParams.dodgePosition);
-        defendingParams.setAction("roll");
-      } else {
-        defendingParams.setAction("hit");
-      }
-      await new Promise((resolve) =>
-        setTimeout(
-          resolve,
-          attackingParams.framesList.attack.frameCount *
-            attackingParams.framesList.attack.frameDuration
-        )
-      );
+      for (const action of battleResult.actions) {
+        console.log("action");
+        const attackerEntity =
+          action.attacker === attacker.id ? "playerA" : "playerB";
+        const defenderEntity =
+          action.defender === defender.id ? "playerB" : "playerA";
 
-      // Handle defending sprite response
-      if (action.isDodged) {
-        defendingParams.setPosition(defendingParams.resetPosition);
-      } else {
-        // Apply hit animation and health deduction
-        defendingParams.setAction("hit");
+        const attackerDefaultPosition =
+          action.attacker === attacker.id
+            ? defaultPositions.attacker
+            : defaultPositions.defender;
+        const defenderDefaultPosition =
+          action.defender === defender.id
+            ? defaultPositions.defender
+            : defaultPositions.attacker;
 
-        // Use local health copy for updates
-        const currentHealth = defendingParams.getHealth();
-        const newHealth = Math.max(currentHealth - action.damageDealt, 0);
+        // Move to "run" action
+        (gameEngineRef as any).dispatch({
+          type: "change-action",
+          entity: attackerEntity,
+          action: "run",
+        });
 
-        console.log("*********************************");
-        // Set attackerHealthLocal and defenderHealthLocal
-        if (attacking === "attacker") {
-          attackerHealthLocal = newHealth;
-          console.log("attackerHealthLocal", attackerHealthLocal);
-        } else {
-          defenderHealthLocal = newHealth;
-          console.log("defenderHealthLocal", defenderHealthLocal);
-        }
-        console.log("*********************************");
-
-        console.log(
-          `${action.defender} takes damage: ${action.damageDealt}, health: ${currentHealth} → ${newHealth}`
-        );
-
-        defendingParams.updateHealth(newHealth);
-
+        // Move attacker near the defender
         await new Promise((resolve) =>
-          setTimeout(
-            resolve,
-            defendingParams.framesList.hit.frameCount *
-              defendingParams.framesList.hit.frameDuration
-          )
+          setTimeout(() => {
+            (gameEngineRef as any).dispatch({
+              type: "move-entity",
+              entity: attackerEntity,
+              moveTo: calculateAttackerPosition(
+                attackerEntity,
+                attackerDefaultPosition,
+                defenderDefaultPosition
+              ),
+            });
+            resolve(true);
+          }, 100)
         );
 
-        // If health is zero, trigger death animation
-        if (newHealth === 0) {
-          console.log(`${action.defender} has been defeated!`);
-          defendingParams.setAction("death");
-          await new Promise((resolve) =>
-            setTimeout(
-              resolve,
-              defendingParams.framesList.death.frameCount *
-                defendingParams.framesList.death.frameDuration
-            )
-          );
+        // Switch to "attack" action
+        const attackConfig = SPRITE_CONFIGS[attackerEntity].attack;
+        const attackDuration =
+          (attackConfig.frameCount * 1000) / attackConfig.frameDuration;
 
-          // Reset winner's position and set to idle
-          attackingParams.setPosition(attackingParams.resetPosition);
-          attackingParams.setAction("idle");
-          return; // End battle after death
+        (gameEngineRef as any).dispatch({
+          type: "change-action",
+          entity: attackerEntity,
+          action: "attack",
+        });
+
+        // Dodge animation (if applicable)
+        if (action.isDodged) {
+          const dodgeX = defenderEntity === "playerB" ? 30 : -30;
+          (gameEngineRef as any).dispatch({
+            type: "move-entity",
+            entity: defenderEntity,
+            moveTo: [
+              defenderDefaultPosition[0] + dodgeX,
+              defenderDefaultPosition[1] + 20,
+            ],
+          });
+        } else {
+          // Update health if not dodged
+          (gameEngineRef as any).dispatch({
+            type: "update-health",
+            entity: defenderEntity,
+            damage: action.damageDealt, // Apply damage dealt to the defender
+          });
         }
+
+        await new Promise((resolve) => setTimeout(resolve, attackDuration));
+
+        // If health is less than 25% but not yet dead, switch to "dying" action else, switch to "idle"
+        if (
+          action.attackerHealth <= attackerMaxHealth * 0.4 &&
+          action.attackerHealth > 0
+        ) {
+          (gameEngineRef as any).dispatch({
+            type: "change-action",
+            entity: attackerEntity,
+            action: "dying",
+          });
+          (gameEngineRef as any).dispatch({
+            type: "move-entity",
+            entity: attackerEntity,
+            moveTo: calculateDeadOrDyingPosition(
+              attackerEntity,
+              "dying",
+              attackerDefaultPosition
+            ),
+          });
+        } else if (action.attackerHealth <= 0) {
+          (gameEngineRef as any).dispatch({
+            type: "change-action",
+            entity: attackerEntity,
+            action: "dead",
+          });
+          (gameEngineRef as any).dispatch({
+            type: "move-entity",
+            entity: attackerEntity,
+            moveTo: calculateDeadOrDyingPosition(
+              attackerEntity,
+              "dead",
+              attackerDefaultPosition
+            ),
+          });
+        } else {
+          // Reset attacker to idle position and action
+          (gameEngineRef as any).dispatch({
+            type: "move-entity",
+            entity: attackerEntity,
+            moveTo: attackerDefaultPosition,
+          });
+          (gameEngineRef as any).dispatch({
+            type: "change-action",
+            entity: attackerEntity,
+            action: "idle",
+          });
+        }
+
+        // If health is less than 25% but not yet dead, switch to "dying" action else, switch to "idle"
+        if (
+          action.defenderHealth <= defenderMaxHealth * 0.4 &&
+          action.defenderHealth > 0
+        ) {
+          console.log("defender dying");
+          (gameEngineRef as any).dispatch({
+            type: "change-action",
+            entity: defenderEntity,
+            action: "dying",
+          });
+          (gameEngineRef as any).dispatch({
+            type: "move-entity",
+            entity: defenderEntity,
+            moveTo: calculateDeadOrDyingPosition(
+              defenderEntity,
+              "dying",
+              defenderDefaultPosition
+            ),
+          });
+        } else if (action.defenderHealth <= 0) {
+          (gameEngineRef as any).dispatch({
+            type: "change-action",
+            entity: defenderEntity,
+            action: "dead",
+          });
+          (gameEngineRef as any).dispatch({
+            type: "move-entity",
+            entity: defenderEntity,
+            moveTo: calculateDeadOrDyingPosition(
+              defenderEntity,
+              "dead",
+              defenderDefaultPosition
+            ),
+          });
+        } else {
+          // Reset defender's position if dodged
+          (gameEngineRef as any).dispatch({
+            type: "move-entity",
+            entity: defenderEntity,
+            moveTo: defenderDefaultPosition,
+          });
+          (gameEngineRef as any).dispatch({
+            type: "change-action",
+            entity: defenderEntity,
+            action: "idle",
+          });
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        attacker.stats.health = attackerMaxHealth;
+        defender.stats.health = defenderMaxHealth;
       }
 
-      // Reset positions and animations to idle
-      attackingParams.setPosition(attackingParams.resetPosition);
-      attackingParams.setAction("idle");
+      // Switch winner to "winBefore" action then switch to "win" action
+      const winnerEntity =
+        battleResult.winner === attacker.id ? "playerA" : "playerB";
+      const winnerDefaultPosition =
+        defaultPositions[winnerEntity === "playerA" ? "attacker" : "defender"];
+      console.log("winnerDefaultPosition", winnerDefaultPosition);
+      (gameEngineRef as any).dispatch({
+        type: "change-action",
+        entity: winnerEntity,
+        action: "winBefore",
+      });
+      (gameEngineRef as any).dispatch({
+        type: "move-entity",
+        entity: winnerEntity,
+        moveTo: calculateDeadOrDyingPosition(
+          winnerEntity,
+          "winBefore",
+          winnerDefaultPosition
+        ),
+      });
+      const winBeforeDuration =
+        (SPRITE_CONFIGS[winnerEntity].winBefore.frameCount * 1000) /
+        SPRITE_CONFIGS[winnerEntity].winBefore.frameDuration;
 
-      if (defendingParams.getHealth() > 0) {
-        defendingParams.setAction("idle");
-      }
+      await new Promise((resolve) => setTimeout(resolve, winBeforeDuration));
 
-      // Pause briefly before the next action
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      (gameEngineRef as any).dispatch({
+        type: "change-action",
+        entity: winnerEntity,
+        action: "win",
+      });
+      (gameEngineRef as any).dispatch({
+        type: "move-entity",
+        entity: winnerEntity,
+        moveTo: calculateDeadOrDyingPosition(
+          winnerEntity,
+          "win",
+          winnerDefaultPosition
+        ),
+      });
     }
-
-    // After battle: Ensure winner is idle and at their original position
-    if (currentAttackerHealth > 0) {
-      const attackingParams = getPhaseParams(attacker.username);
-      attackingParams.setPosition(attackingParams.resetPosition);
-      attackingParams.setAction("idle");
-    } else if (currentDefenderHealth > 0) {
-      const defendingParams = getPhaseParams(defender.username);
-      defendingParams.setPosition(defendingParams.resetPosition);
-      defendingParams.setAction("idle");
-    }
-  };
-
-  const showPreview = async () => {
-    const battleResult = battleOutcome(attacker, defender);
-    console.log("attacker", attacker);
-    console.log("defender", defender);
-    setBattleLogs(battleResult.actions.map((a) => JSON.stringify(a)));
-    console.log("battleResult", battleResult);
-    await processActions(battleResult.actions);
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.environment}>
+    <>
+      <View style={styles.engineWrapper}>
         <ImageBackground
           source={require("@assets/images/environments/forest.png")}
           style={{ width: "100%", height: "100%" }}
         >
-          <GameEngine style={styles.engine} systems={systems} entities={{}} />
-          <View style={styles.healthBarWrapper}>
-            <View style={styles.healthBar}>
-              <Text style={styles.healthNumber}>{attackerHealthLocal}</Text>
-              <View
-                style={[
-                  styles.health,
-                  {
-                    width: `${
-                      (attackerHealthLocal / attacker.stats.health) * 100
-                    }%`,
-                  },
-                ]}
-              ></View>
-            </View>
-            <View style={styles.healthBar}>
-              <Text style={styles.healthNumber}>{defenderHealthLocal}</Text>
-              <View
-                style={[
-                  styles.health,
-                  {
-                    width: `${
-                      (defenderHealthLocal / defender.stats.health) * 100
-                    }%`,
-                  },
-                ]}
-              ></View>
-            </View>
-          </View>
-          <AttackerSprite />
-          <DefenderSprite />
+          <GameEngine
+            ref={(ref) => (gameEngineRef = ref)} // Store the GameEngine ref
+            style={styles.container}
+            systems={[ActionSystem]} // Add ActionSystem to process events
+            entities={entities}
+          />
         </ImageBackground>
       </View>
-      <View style={styles.infoWrapper}>
-        <Text style={styles.info}>Attacker Health:</Text>
-        <Text style={styles.info}>tests</Text>
+      <View style={styles.buttons}>
+        <Button title="Chain Events" onPress={showBattlePreview} />
+        <Button
+          title="Idle"
+          onPress={() => handleActionChange("attacker", "idle")}
+        />
+        <Button
+          title="Attack"
+          onPress={() => handleActionChange("attacker", "attack")}
+        />
+        <Button
+          title="Win"
+          onPress={() => handleActionChange("attacker", "winBefore")}
+        />
       </View>
-      <Button title="Start" onPress={showPreview} />
-    </View>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
+  engineWrapper: {
+    width: "100%",
+    height: 200,
+  },
   container: {
-    display: "flex",
-    flexDirection: "column",
-  },
-  engine: {
-    position: "relative",
-  },
-  environment: {
-    position: "relative",
+    flex: 1,
     height: 200,
-    backgroundImage: require("@assets/images/environments/forest.png"),
-    backgroundRepeat: "no-repeat",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
     width: "100%",
-    backgroundColor: "red",
   },
-  infoWrapper: {
-    backgroundColor: "#101010",
-    color: "#FFFFFF",
-    height: 200,
-    padding: 20,
-  },
-  info: {
-    color: "#FFFFFF",
-  },
-  spriteContainer: {
-    position: "absolute",
-    overflow: "hidden",
-    transform: [{ scale: 1.5 }],
-  },
-  sprite: {
-    transitionProperty: "all",
-    transitionDuration: "700ms",
-  },
-  healthBarWrapper: {
-    display: "flex",
+  buttons: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 10,
-    position: "absolute",
-    top: 30,
-    width: "100%",
-  },
-  healthBar: {
-    height: 15,
-    width: "40%",
-    backgroundColor: "red",
-    borderRadius: 3,
-    borderColor: "white",
-    borderWidth: 1,
-    position: "relative",
-
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  health: {
-    backgroundColor: "green",
-    height: "100%",
-    transitionProperty: "width",
-    transitionDuration: "200ms",
-    textAlign: "center",
-  },
-  healthNumber: {
-    color: "white",
-    fontSize: 10,
-    position: "absolute",
-    top: 0,
-    left: 0,
-    zIndex: 5,
-    width: "auto",
-    marginLeft: "auto",
-    marginRight: "auto",
+    justifyContent: "space-around",
+    marginTop: 10,
   },
 });
 

@@ -11,35 +11,48 @@ export interface Stats {
 }
 
 export interface Avatar {
-  username: string;
+  id: string;
   avatarId: string;
   stats: Stats;
 }
 
 // Define an interface for individual actions
 export interface ActionSprites {
-  die: string[];
-  hit: string[];
-  idle: string[];
+  die?: string[];
+  hit?: string[];
+  idle?: string[];
   attack?: string[];
   run?: string[];
   walk?: string[];
   shoot?: string[];
+  critical?: string[];
 }
 
 export type AvatarAction =
-  | "die"
+  | "dying"
+  | "dead"
   | "hit"
   | "idle"
   | "attack"
   | "run"
   | "walk"
-  | "shoot";
+  | "critical"
+  | "roll"
+  | "winBefore"
+  | "win";
 
-// Interface for a collection of character sprites
-export interface CharacterSprites {
-  [characterName: string]: ActionSprites; // Keyed by character name
+export interface SpriteSettings {
+  image: any;
+  columns: number;
+  rows: number;
+  width: number;
+  height: number;
+  frameCount: number;
+  frameDuration: number;
 }
+
+export interface CharacterSprites
+  extends Record<AvatarAction, SpriteSettings> {}
 
 // Position interface for animation placement
 export interface Position {

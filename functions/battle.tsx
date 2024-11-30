@@ -40,8 +40,8 @@ const applyDamage = (
   defender.stats.health = Math.max(defender.stats.health - damage, 0);
 
   actions.push({
-    attacker: attacker.username,
-    defender: defender.username,
+    attacker: attacker.id,
+    defender: defender.id,
     damageDealt: damage,
     attackerHealth: attacker.stats.health,
     defenderHealth: defender.stats.health,
@@ -87,8 +87,8 @@ export const battleOutcome = (attacker: Avatar, defender: Avatar) => {
     applyDamage(attacker, defender, isCritical, isDodged, actions);
 
     if (defender.stats.health <= 0) {
-      winner = attacker.username;
-      loser = defender.username;
+      winner = attacker.id;
+      loser = defender.id;
       gainExperience(attacker, 50);
       break;
     }
@@ -105,8 +105,8 @@ export const battleOutcome = (attacker: Avatar, defender: Avatar) => {
     );
 
     if (attacker.stats.health <= 0) {
-      winner = defender.username;
-      loser = attacker.username;
+      winner = defender.id;
+      loser = attacker.id;
       gainExperience(defender, 50);
       break;
     }
